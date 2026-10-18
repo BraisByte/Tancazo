@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="gl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#091523">
+  <meta name="description" content="Tancazo, arcade cooperativo de tanques en color.">
+  <title>Tancazo — Defensa acorazada</title>
+  <link rel="stylesheet" href="/styles/main.css">
+</head>
+<body>
+  <main id="game" aria-label="Tancazo"></main>
+
+  <section id="menu" class="panel menu">
+    <p class="eyebrow">ARCADE COOPERATIVO</p>
+    <h1>TANCAZO</h1>
+    <p class="tagline">Defende o núcleo. Rompe o cerco. Volve con reforzos.</p>
+
+    <label class="name-field">Nome
+      <input id="player-name" maxlength="18" value="Comandante" autocomplete="nickname">
+    </label>
+
+    <label class="seat-field">Xogadores neste dispositivo
+      <select id="online-seats" aria-label="Jugadores online en este dispositivo">
+        <option value="1">1 xogador</option>
+        <option value="2">2 xogadores locais</option>
+      </select>
+    </label>
+
+    <div class="setup-row">
+      <label>Campo
+        <select id="map-select">
+          <option value="citadel">Ciudadela Esmeralda</option>
+          <option value="foundry">Forxa Rubí</option>
+          <option value="delta">Delta Cobalto</option>
+        </select>
+      </label>
+      <label>Dificultade
+        <select id="difficulty-select">
+          <option value="easy">Patrulla</option>
+          <option value="normal" selected>Asedio</option>
+          <option value="hard">Tormenta</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="actions">
+      <button id="solo">Un xogador</button>
+      <button id="local" class="accent">Cooperativo local</button>
+      <button id="host">Crear sala online</button>
+    </div>
+
+    <div class="secondary-actions">
+      <button id="campaign">Campaña</button>
+      <button id="editor">Editor</button>
+      <button id="settings">Accesibilidade</button>
+    </div>
+
+    <div class="join-row">
+      <input id="room-code" maxlength="5" placeholder="CÓDIGO" aria-label="Código de sala">
+      <button id="join">Entrar</button>
+      <button id="spectate">Ver</button>
+    </div>
+
+    <p id="menu-message" class="message" role="status"></p>
+    <div class="controls">
+      <span><b>X1</b> WASD · Espazo</span>
+      <span><b>X2</b> Frechas · Intro</span>
+      <span><b>MANDO</b> Stick · A</span>
+    </div>
+  </section>
+
+  <section id="campaign-panel" class="panel wide hidden">
+    <p class="eyebrow">OPERACIÓN TANCAZO</p>
+    <h2>Campaña por sectores</h2>
+    <div id="campaign-missions" class="mission-grid"></div>
+    <h3>Melloras permanentes</h3>
+    <p class="currency">Medallas dispoñibles: <strong id="medals">0</strong></p>
+    <div id="upgrade-list" class="upgrade-list"></div>
+    <button id="campaign-back">Volver</button>
+  </section>
+
+  <section id="editor-panel" class="panel editor-panel hidden">
+    <p class="eyebrow">TALLER DE CAMPO</p>
+    <h2>Editor de mapas</h2>
+    <div class="editor-layout">
+      <div id="editor-grid" class="editor-grid" aria-label="Cuadrícula del mapa"></div>
+      <div class="editor-tools">
+        <div id="tile-palette" class="tile-palette"></div>
+        <label>Nome<input id="editor-name" value="O meu campo" maxlength="30"></label>
+        <textarea id="editor-json" rows="5" aria-label="JSON del mapa"></textarea>
+        <button id="editor-export">Exportar JSON</button>
+        <button id="editor-import">Importar JSON</button>
+        <button id="editor-play" class="accent">Probar mapa</button>
+        <button id="editor-back">Volver</button>
+      </div>
+    </div>
+    <p id="editor-message" class="message"></p>
+  </section>
+
+  <section id="settings-panel" class="panel settings-panel hidden">
+    <p class="eyebrow">ACCESIBILIDADE</p>
+    <h2>Axustes de xogo</h2>
+    <label><span>Volume</span><input id="setting-volume" type="range" min="0" max="100" value="70"></label>
+    <label><span>Tamaño da interface</span><input id="setting-ui" type="range" min="85" max="125" value="100"></label>
+    <label><span>Sacudida de cámara</span><input id="setting-shake" type="checkbox" checked></label>
+    <label><span>Alto contraste</span><input id="setting-contrast" type="checkbox"></label>
+    <label><span>Axuda de apuntado</span><input id="setting-aim" type="checkbox"></label>
+    <h3>Controis do xogador 1</h3>
+    <div id="binding-list" class="binding-list"></div>
+    <button id="settings-back" class="accent">Gardar e volver</button>
+  </section>
+
+  <section id="online-lobby" class="panel lobby hidden">
+    <p class="eyebrow">CENTRO DE MANDO · SALA <span id="lobby-room">-----</span></p>
+    <h2>Preparar operación</h2>
+    <div id="lobby-roster" class="roster"></div>
+    <div class="setup-row lobby-settings">
+      <label>Campo
+        <select id="lobby-map">
+          <option value="citadel">Ciudadela Esmeralda</option>
+          <option value="foundry">Forxa Rubí</option>
+          <option value="delta">Delta Cobalto</option>
+        </select>
+      </label>
+      <label>Dificultade
+        <select id="lobby-difficulty">
+          <option value="easy">Patrulla</option>
+          <option value="normal">Asedio</option>
+          <option value="hard">Tormenta</option>
+        </select>
+      </label>
+    </div>
+    <p id="lobby-hint" class="message">Agardando os demais comandantes…</p>
+    <div class="actions">
+      <button id="lobby-ready" class="accent">Estou preparado</button>
+      <button id="lobby-start">Comezar</button>
+      <button id="lobby-back">Saír da sala</button>
+    </div>
+  </section>
+
+  <header id="hud" class="hud hidden">
+    <div><small>PUNTOS</small><strong id="score">000000</strong></div>
+    <div class="mission"><small id="mode">LOCAL</small><strong id="status">DEFENDE O NÚCLEO</strong></div>
+    <div><small>INIMIGOS</small><strong id="enemies">12</strong><em id="difficulty">ASEDIO</em></div>
+    <div id="room-wrap" class="room hidden"><small>SALA</small><strong id="room">-----</strong></div>
+  </header>
+  <div id="player-status" class="player-status hidden"></div>
+
+  <div id="touch-controls" class="touch-controls" aria-label="Controles táctiles">
+    <div class="touch-dpad">
+      <button data-control="up">▲</button><button data-control="left">◀</button>
+      <button data-control="down">▼</button><button data-control="right">▶</button>
+    </div>
+    <div class="touch-actions"><button data-control="switch">Q</button><button data-control="fire">●</button></div>
+  </div>
+
+  <section id="result" class="panel result hidden">
+    <p class="eyebrow">MISIÓN REMATADA</p>
+    <h2 id="result-title">VICTORIA</h2>
+    <p id="result-copy"></p>
+    <button id="restart" class="accent">Xogar de novo</button>
+    <button id="back">Volver ao menú</button>
+  </section>
+
+  <div id="connection" class="connection hidden">Conectando…</div>
+  <script type="module" src="/src/client/main.js"></script>
+</body>
+</html>

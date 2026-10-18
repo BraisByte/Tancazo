@@ -1,0 +1,15 @@
+services:
+  tancazo:
+    build: .
+    ports:
+      - "8490:8490"
+    environment:
+      PORT: 8490
+      HOST: 0.0.0.0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8490/health"]
+      interval: 20s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
