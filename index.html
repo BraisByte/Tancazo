@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#091523">
   <meta name="description" content="Tancazo, arcade cooperativo de tanques en color.">
   <title>Tancazo — Defensa acorazada</title>
-  <link rel="stylesheet" href="/styles/main.css">
+  <link rel="stylesheet" href="/styles/main.css?v=27">
 </head>
 <body>
   <main id="game" aria-label="Tancazo"></main>
@@ -55,6 +55,7 @@
     </div>
 
     <div class="secondary-actions">
+      <button id="training">Aprender a xogar</button>
       <button id="campaign" class="accent">Seleccionar misión</button>
       <button id="garage">Garaxe</button>
       <button id="editor">Editor</button>
@@ -70,7 +71,7 @@
 
     <p id="menu-message" class="message" role="status"></p>
     <div class="controls">
-      <span><b>X1</b> WASD · Espazo · E · F</span>
+      <span><b>X1</b> WASD · Rato e clic / Espazo · E · F</span>
       <span><b>X2</b> Frechas · Intro · / · Num0</span>
       <span><b>MANDO</b> Stick · A · B · LB</span>
     </div>
@@ -120,12 +121,15 @@
     <label><span>Música</span><input id="setting-music" type="range" min="0" max="100" value="70"></label>
     <label><span>Efectos</span><input id="setting-effects" type="range" min="0" max="100" value="70"></label>
     <label><span>Voces de radio</span><input id="setting-radio" type="checkbox" checked></label>
+    <p id="voice-hint" class="message">Celtia · unha única voz en galego, co volume igualado entre avisos.</p>
+    <button id="preview-voice" class="audio-preview-button">Probar voz de radio</button>
     <button id="preview-music" class="audio-preview-button">♪ Probar música de fondo</button>
     <h3 class="settings-section">Imaxe e controis</h3>
     <label><span>Tamaño da interface</span><input id="setting-ui" type="range" min="85" max="125" value="100"></label>
     <label><span>Sacudida de cámara</span><input id="setting-shake" type="checkbox" checked></label>
     <label><span>Alto contraste</span><input id="setting-contrast" type="checkbox"></label>
     <label><span>Axuda de apuntado</span><input id="setting-aim" type="checkbox"></label>
+    <label><span>Apuntar co rato · clic para disparar</span><input id="setting-mouse" type="checkbox" checked></label>
     <h3>Controis do xogador 1</h3>
     <div id="binding-list" class="binding-list"></div>
     <button id="settings-back" class="accent">Gardar e volver</button>
@@ -170,7 +174,7 @@
     <div id="room-wrap" class="room hidden"><small>SALA</small><strong id="room">-----</strong></div>
   </header>
   <div id="battle-status" class="battle-status hidden">
-    <span>NÚCLEO <b id="base-health">◆◆◆</b></span>
+    <span>NÚCLEO <b id="base-health">◆◆◆◆ · 4/4</b></span>
     <span>RANGO <b id="team-rank">I · 0/5</b><i class="rank-meter"><i id="rank-fill"></i></i></span>
     <span class="music-scene">MÚSICA <b id="music-scene">CIUDADELA</b></span>
     <span>COMBO <b id="combo">×0</b></span>
@@ -180,6 +184,11 @@
   <canvas id="minimap" class="minimap hidden" width="150" height="150" aria-label="Minimapa"></canvas>
   <div id="player-status" class="player-status hidden"></div>
   <div id="game-notice" class="game-notice hidden" role="status"></div>
+  <aside id="training-guide" class="training-guide hidden" aria-live="polite">
+    <b id="training-title">ADESTRAMENTO · 1/4</b>
+    <p id="training-copy"></p>
+    <small>Esc · Volver ao menú</small>
+  </aside>
 
   <div id="touch-controls" class="touch-controls" aria-label="Controles táctiles">
     <div class="touch-dpad">
@@ -193,6 +202,8 @@
     <p class="eyebrow">MISIÓN REMATADA</p>
     <h2 id="result-title">VICTORIA</h2>
     <p id="result-copy"></p>
+    <p id="result-stats" class="result-stats"></p>
+    <p id="result-advice" class="result-advice"></p>
     <div id="perk-choices" class="perk-choices hidden"></div>
     <button id="restart" class="accent">Xogar de novo</button>
     <button id="result-campaign" class="hidden">Ver campaña</button>
@@ -200,6 +211,6 @@
   </section>
 
   <div id="connection" class="connection hidden">Conectando…</div>
-  <script type="module" src="/src/client/main.js?v=22"></script>
+  <script type="module" src="/src/client/main.js?v=27"></script>
 </body>
 </html>

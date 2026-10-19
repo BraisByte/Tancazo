@@ -52,7 +52,7 @@ const server = createServer((req, res) => {
   }
   res.writeHead(200, {
     'content-type': types.get(extname(path)) || 'application/octet-stream',
-    'cache-control': process.env.NODE_ENV === 'production' ? 'public, max-age=3600' : 'no-store',
+    'cache-control': ['.html', '.js', '.css', '.json'].includes(extname(path)) ? 'no-cache' : process.env.NODE_ENV === 'production' ? 'public, max-age=3600' : 'no-store',
     'x-content-type-options': 'nosniff',
     'content-security-policy': "default-src 'self'; connect-src 'self' ws: wss:; style-src 'self'; img-src 'self' data:; script-src 'self'",
     'referrer-policy': 'no-referrer',

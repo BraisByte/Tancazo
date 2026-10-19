@@ -1,0 +1,32 @@
+{
+  "voice": "Celtia",
+  "language": "gl-ES",
+  "clips": {
+    "Unidade danada. Busca cobertura.": "/src/client/radio/preview.wav?v=0de4f490713c",
+    "Habilidade especial activada.": "/src/client/radio/ultimate.wav?v=fbafc97ea9dc",
+    "Unidade danada. Protexe a parte traseira.": "/src/client/radio/critical.wav?v=6a5462158e7a",
+    "Supervivente localizado. Escolta ata a saída.": "/src/client/radio/rescue.wav?v=cbeedad4a574",
+    "Unidade recuperada.": "/src/client/radio/revive.wav?v=1d48b3e52165",
+    "Alerta. O xefe cambia de fase.": "/src/client/radio/boss.wav?v=967079d6eea8",
+    "Ascenso ao rango 1.": "/src/client/radio/rank-1.wav?v=b3c8f126bdef",
+    "Ascenso ao rango 2.": "/src/client/radio/rank-2.wav?v=53d8452a6f73",
+    "Ascenso ao rango 3.": "/src/client/radio/rank-3.wav?v=209d7da5d7fe",
+    "Ascenso ao rango 4.": "/src/client/radio/rank-4.wav?v=7a9bcb40a64d",
+    "Ascenso ao rango 5.": "/src/client/radio/rank-5.wav?v=5b2832e25ab8",
+    "Conxelador dispoñible.": "/src/client/radio/pickup-freeze.wav?v=e210ace3ef87",
+    "Conxelador en uso.": "/src/client/radio/use-freeze.wav?v=e478fb788e5f",
+    "Bomba dispoñible.": "/src/client/radio/pickup-bomb.wav?v=d59cfd88e21b",
+    "Bomba en uso.": "/src/client/radio/use-bomb.wav?v=02d3818e4ac0",
+    "Pulso electromagnético dispoñible.": "/src/client/radio/pickup-emp.wav?v=8768bd83ba93",
+    "Pulso electromagnético en uso.": "/src/client/radio/use-emp.wav?v=adfbcea92890",
+    "Mina dispoñible.": "/src/client/radio/pickup-mine.wav?v=391b3410966f",
+    "Mina en uso.": "/src/client/radio/use-mine.wav?v=3a3400d27db7",
+    "Engado dispoñible.": "/src/client/radio/pickup-decoy.wav?v=b601c3f4f445",
+    "Engado en uso.": "/src/client/radio/use-decoy.wav?v=536b4a76ad8b",
+    "Reparación dispoñible.": "/src/client/radio/pickup-repair.wav?v=837afcbf6e9b",
+    "Reparación en uso.": "/src/client/radio/use-repair.wav?v=2bdc29544041",
+    "Fortaleza dispoñible.": "/src/client/radio/pickup-fortress.wav?v=8a432da0ec01",
+    "Fortaleza en uso.": "/src/client/radio/use-fortress.wav?v=0d5117921ef1",
+    "Armamento recollido.": "/src/client/radio/armament.wav?v=afe184def630"
+  }
+}

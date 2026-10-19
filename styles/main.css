@@ -20,6 +20,8 @@ canvas { display: block; width: 100%; height: 100%; }
 button, input, select { font: inherit; }
 
 .panel {
+  max-height: 94dvh;
+  overflow-y: auto;
   position: fixed;
   left: 50%; top: 50%;
   width: min(92vw, 520px);
@@ -31,6 +33,17 @@ button, input, select { font: inherit; }
   box-shadow: 0 30px 90px rgba(0, 0, 0, .46), inset 0 1px rgba(255, 255, 255, .08);
   backdrop-filter: blur(16px);
   z-index: 5;
+}
+
+#game.mouse-aim { cursor: crosshair; }
+.training-guide { position: fixed; left: 18px; top: 150px; width: min(300px, 85vw); padding: 16px; border: 1px solid var(--mint); border-radius: 12px; background: rgba(3,20,29,.95); z-index: 4; pointer-events: none; }
+.training-guide b { color: var(--mint); font-size: 12px; letter-spacing: .1em; }
+.training-guide p, .result-advice { line-height: 1.5; font-size: 14px; }
+.training-guide small, .result-stats { color: #b7cfda; }
+.result-advice { padding: 12px; background: #47e6a410; border-left: 3px solid var(--mint); text-align: left; }
+@media (max-width: 650px) {
+  .training-guide { left: 10px; top: 145px; bottom: auto; width: calc(100vw - 20px); padding: 12px; }
+  .training-guide p { margin: 8px 0; font-size: 12px; }
 }
 
 .menu h1 {
@@ -215,11 +228,18 @@ body.reduced-shake canvas { transform: none !important; }
   .secondary-actions { grid-template-columns: 1fr 1fr; }
   .editor-layout { grid-template-columns: 1fr; }
   .editor-grid { min-width: 0; }
-  .player-status { bottom: 90px; max-width: calc(100vw - 20px); overflow: hidden; }
-  .battle-status { top: 104px; right: 10px; bottom: auto; flex-direction: column; }
+  .player-status { left: 10px; bottom: 130px; max-width: calc(100vw - 20px); overflow: hidden; }
+  .battle-status { top: auto; left: 10px; right: 10px; bottom: 190px; flex-direction: row; flex-wrap: wrap; gap: 4px; }
+  .battle-status span { padding: 6px 8px; }
   .music-scene { display: none !important; }
   .minimap { display: none !important; }
   .game-notice { top: 166px; }
+  .touch-controls { inset: auto 12px 12px; align-items: end; }
+  .touch-controls button { width: 44px; height: 44px; padding: 0; }
+  .touch-dpad { grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(2, 44px); gap: 3px; }
+  .touch-actions { display: grid; grid-template-columns: repeat(3, 40px); gap: 4px; }
+  .touch-actions button { width: 40px; height: 40px; }
+  .touch-actions button:last-child { width: 52px; height: 52px; grid-column: 1 / -1; justify-self: end; }
 }
 
 @media (pointer: coarse) { body.playing .touch-controls { display: flex !important; } }

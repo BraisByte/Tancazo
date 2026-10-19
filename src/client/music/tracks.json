@@ -1,3 +1,46 @@
 {
-  "tracks": {}
+  "tracks": {
+    "menu": "/src/client/music/menu.wav",
+    "green-line": "/src/client/music/green-line.wav",
+    "red-forge": "/src/client/music/red-forge.wav",
+    "frozen-pass": "/src/client/music/frozen-pass.wav",
+    "silent-depot": "/src/client/music/silent-depot.wav",
+    "iron-convoy": "/src/client/music/iron-convoy.wav",
+    "emerald-marsh": "/src/client/music/emerald-marsh.wav",
+    "broken-arsenal": "/src/client/music/broken-arsenal.wav",
+    "ghost-rescue": "/src/client/music/ghost-rescue.wav",
+    "last-bastion": "/src/client/music/last-bastion.wav",
+    "command-gate": "/src/client/music/command-gate.wav",
+    "cobalt-heart": "/src/client/music/cobalt-heart.wav",
+    "boss": "/src/client/music/boss.wav",
+    "citadel": "/src/client/music/green-line.wav",
+    "foundry": "/src/client/music/red-forge.wav",
+    "glacier": "/src/client/music/frozen-pass.wav",
+    "delta": "/src/client/music/ghost-rescue.wav",
+    "marsh": "/src/client/music/emerald-marsh.wav",
+    "arsenal": "/src/client/music/broken-arsenal.wav",
+    "fortress": "/src/client/music/last-bastion.wav"
+  },
+  "titles": {
+    "menu": "Centro de mando",
+    "green-line": "Amanecer esmeralda",
+    "red-forge": "Pulso da forxa",
+    "frozen-pass": "Cristais do norte",
+    "silent-depot": "Sinal na noite",
+    "iron-convoy": "Columna de aceiro",
+    "emerald-marsh": "Ecos da néboa",
+    "broken-arsenal": "Faíscas e sabotaxe",
+    "ghost-rescue": "Luces de rescate",
+    "last-bastion": "A última muralla",
+    "command-gate": "Romper o cerco",
+    "cobalt-heart": "Corazón cobalto",
+    "boss": "Leviatán",
+    "citadel": "Amanecer esmeralda",
+    "foundry": "Pulso da forxa",
+    "glacier": "Cristais do norte",
+    "delta": "Luces de rescate",
+    "marsh": "Ecos da néboa",
+    "arsenal": "Faíscas e sabotaxe",
+    "fortress": "A última muralla"
+  }
 }

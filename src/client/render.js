@@ -44,11 +44,16 @@ export class GameRenderer {
     this.shakeEnabled = true;
     this.lookTarget = new THREE.Vector3(7.5, 0, 7.5);
     this.cameraHome = this.camera.position.clone();
+    this.aimRay = new THREE.Raycaster();
+    this.aimPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -.3);
+    this.aimPoint = new THREE.Vector3();
+    this.aimScreen = new THREE.Vector2();
     this.fxGeometry = new THREE.BoxGeometry(.11, .11, .11);
     this.fxMaterials = {
       brick: new THREE.MeshBasicMaterial({ color: 0xffa15c }),
       spark: new THREE.MeshBasicMaterial({ color: 0xdffaff }),
       hit: new THREE.MeshBasicMaterial({ color: 0xffee88 }),
+      'core-hit': new THREE.MeshBasicMaterial({ color: 0xff9f43 }),
       boom: new THREE.MeshBasicMaterial({ color: 0xff593f }),
       base: new THREE.MeshBasicMaterial({ color: 0x7fffd4 }),
       pickup: new THREE.MeshBasicMaterial({ color: 0x8dffbd }),
@@ -94,7 +99,7 @@ export class GameRenderer {
     const width = innerWidth;
     const height = innerHeight;
     const aspect = width / height;
-    const size = 9.3;
+    const size = 9.3 / Math.min(1, aspect);
     this.camera.left = -size * aspect;
     this.camera.right = size * aspect;
     this.camera.top = size;
@@ -230,6 +235,18 @@ export class GameRenderer {
     points.geometry.attributes.position.needsUpdate = true;
   }
 
+  aimAt(clientX, clientY, player) {
+    if (!player?.alive) return null;
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    this.aimScreen.set((clientX - rect.left) / rect.width * 2 - 1, 1 - (clientY - rect.top) / rect.height * 2);
+    this.camera.updateMatrixWorld();
+    this.aimRay.setFromCamera(this.aimScreen, this.camera);
+    if (!this.aimRay.ray.intersectPlane(this.aimPlane, this.aimPoint)) return null;
+    const dx = this.aimPoint.x - player.x, dz = this.aimPoint.z - player.z;
+    const length = Math.hypot(dx, dz);
+    return length > .1 ? { aimX: dx / length, aimZ: dz / length } : null;
+  }
+
   makeTank(tank) {
     if (tank.kind === 'weakpoint') {
       const weakpoint = new THREE.Mesh(new THREE.OctahedronGeometry(.25), new THREE.MeshStandardMaterial({ color: 0xffcf56, emissive: 0xff5d31, emissiveIntensity: .85, roughness: .2 }));
@@ -271,6 +288,26 @@ export class GameRenderer {
     shield.userData.shield = true;
     shield.visible = false;
     group.add(body, leftTrack, rightTrack, turret, barrel, shield);
+    if (tank.role === 'sniper') barrel.scale.z = 1.7;
+    if (tank.role === 'scout') body.scale.set(.8, .8, 1.15);
+    if (tank.role === 'heavy') turret.scale.set(1.3, 1.3, 1.3);
+    if (tank.role === 'engineer' || tank.role === 'commander') {
+      const antenna = new THREE.Mesh(new THREE.CylinderGeometry(.025, .025, .55, 6), dark);
+      antenna.position.set(.2, .7, .15);
+      const beacon = new THREE.Mesh(tank.role === 'commander' ? new THREE.OctahedronGeometry(.12) : new THREE.BoxGeometry(.14, .14, .14), new THREE.MeshBasicMaterial({ color: 0xffeeaa }));
+      beacon.position.set(.2, 1, .15);
+      group.add(antenna, beacon);
+    }
+    const healthBar = new THREE.Group();
+    healthBar.position.y = 1.15;
+    const healthBack = new THREE.Mesh(new THREE.PlaneGeometry(.8, .09), new THREE.MeshBasicMaterial({ color: 0x08131f, depthTest: false }));
+    const healthFill = new THREE.Mesh(new THREE.PlaneGeometry(.76, .055), new THREE.MeshBasicMaterial({ color: tank.team === 'players' ? 0x47e6a4 : 0xff6577, depthTest: false }));
+    healthFill.position.z = .01;
+    healthBack.renderOrder = 10; healthFill.renderOrder = 11;
+    healthBar.add(healthBack, healthFill);
+    group.add(healthBar);
+    group.userData.healthBar = healthBar;
+    group.userData.healthFill = healthFill;
     if (tank.turret === 'repeater') {
       barrel.position.x = -.09;
       const secondBarrel = barrel.clone(); secondBarrel.position.x = .09; group.add(secondBarrel);
@@ -297,6 +334,11 @@ export class GameRenderer {
     const color = new THREE.Color(bullet.color || (bullet.team === 'players' ? 0x91ffe0 : 0xff6f59));
     const mesh = new THREE.Mesh(new THREE.SphereGeometry(.11, 10, 8), new THREE.MeshBasicMaterial({ color }));
     mesh.add(new THREE.PointLight(color, 1.4, 2));
+    if (bullet.team === 'enemies') {
+      const halo = new THREE.Mesh(new THREE.RingGeometry(.15, .2, 16), new THREE.MeshBasicMaterial({ color: 0xff4c4c, side: THREE.DoubleSide }));
+      halo.rotation.x = -Math.PI / 2;
+      mesh.add(halo);
+    }
     return mesh;
   }
 
@@ -343,6 +385,15 @@ export class GameRenderer {
       mesh.position.z += (targetZ - mesh.position.z) * Math.min(1, dt * (input ? 25 : 18));
       mesh.rotation.y = Math.atan2(-tank.dx, -tank.dz);
       mesh.position.y = Math.sin(this.clock * 5 + tank.x) * .015;
+      if (mesh.userData.healthBar) {
+        const ratio = Math.max(0, tank.hp / tank.maxHp);
+        mesh.userData.healthBar.visible = ratio < 1 || tank.kind === 'boss';
+        mesh.userData.healthBar.quaternion.copy(mesh.quaternion).invert().multiply(this.camera.quaternion);
+        mesh.userData.healthFill.scale.x = ratio;
+        mesh.userData.healthFill.position.x = -.38 * (1 - ratio);
+      }
+      if (mesh.userData.lastHp > tank.hp) mesh.userData.hitUntil = this.clock + .16;
+      mesh.userData.lastHp = tank.hp;
       const shield = mesh.children.find((child) => child.userData.shield);
       if (shield) { shield.visible = tank.shield > 0; shield.rotation.y += dt * 1.8; }
       if (mesh.userData.barrel) mesh.userData.barrel.position.z = -.34 + (tank.recoil || 0) * .1;
@@ -352,6 +403,10 @@ export class GameRenderer {
       if (mesh.userData.bodyMaterial) {
         mesh.userData.bodyMaterial.emissive.setHex(tank.burningTimer > 0 ? 0xb52d18 : tank.overdriveTimer > 0 ? 0xf3b61f : tank.frozenTimer > 0 ? 0x258eb5 : tank.empTimer > 0 ? 0x6e32a8 : 0x000000);
         mesh.userData.bodyMaterial.emissiveIntensity = tank.burningTimer > 0 || tank.overdriveTimer > 0 || tank.frozenTimer > 0 || tank.empTimer > 0 ? .7 : 0;
+        if (mesh.userData.hitUntil > this.clock) {
+          mesh.userData.bodyMaterial.emissive.setHex(0xffffff);
+          mesh.userData.bodyMaterial.emissiveIntensity = .9;
+        }
       }
     }
     for (const bullet of state.bullets) {
@@ -477,7 +532,7 @@ export class GameRenderer {
       if (object.userData.water) object.position.y = -.01 + Math.sin(this.clock * 2.2 + object.position.x) * .025;
       if (object.userData.core) {
         object.rotation.y += dt * 1.7;
-        object.scale.setScalar(.72 + Math.max(0, state.baseHp || 0) / Math.max(1, state.baseMaxHp || 3) * .28);
+        object.scale.setScalar(.72 + Math.max(0, state.baseHp || 0) / Math.max(1, state.baseMaxHp || 4) * .28);
         object.material.emissive.setHex(state.baseShieldTimer > 0 ? 0x2fbfff : 0x000000);
         object.material.emissiveIntensity = state.baseShieldTimer > 0 ? .8 : 0;
       }

@@ -20,7 +20,14 @@ test('lobby configures and starts a four-seat online operation', { timeout: 15_0
     assert.equal((await fetch(`http://127.0.0.1:${port}/server/index.js`)).status, 404);
     const musicManifest = await fetch(`http://127.0.0.1:${port}/src/client/music/tracks.json`);
     assert.equal(musicManifest.status, 200);
-    assert.deepEqual(await musicManifest.json(), { tracks: {} });
+    const music = await musicManifest.json();
+    assert.ok(music.tracks['green-line']);
+    assert.notEqual(music.tracks['green-line'], music.tracks['red-forge']);
+    const recording = await fetch(`http://127.0.0.1:${port}${music.tracks['green-line']}`);
+    assert.equal(recording.status, 200);
+    assert.equal(recording.headers.get('content-type'), 'audio/wav');
+    const document = await fetch(`http://127.0.0.1:${port}/`);
+    assert.equal(document.headers.get('cache-control'), 'no-cache');
 
     const host = new WebSocket(`ws://127.0.0.1:${port}/online?create=1&name=Alpha&seats=2&chassis=bulwark&turret=tesla&engine=turbine&ultimate=aegis`);
     sockets.push(host);

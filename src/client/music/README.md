@@ -1,4 +1,16 @@
-# Música personalizada
+# Banda sonora de Tancazo
+
+Inclúe trece composicións orixinais sintetizadas para este proxecto, sen samples nin gravacións de terceiros: once temas de misión, un de menú e un de xefe. Cada tema ten melodía, baixo, acordes e percusión propios, con dúas frases de catro compases. Os campos de partida rápida usan o tema da misión correspondente.
+
+Para rexenerar os ficheiros WAV e o manifesto:
+
+```bash
+node scripts/generate-music.mjs
+```
+
+A reprodución prioriza a misión actual, despois o escenario. O xefe ten tema propio. Hai fundidos de 1,5 segundos entre temas e só se conservan tres pistas descodificadas na memoria. A música baixa durante as mensaxes de voz. Se unha pista non se pode cargar, actívase o acompañamento procedemental de reserva.
+
+## Música personalizada
 
 Coloca aquí pistas propias ou con licenza compatible en formato OGG, MP3 ou WAV. Despois relaciónaas en `tracks.json`:
 

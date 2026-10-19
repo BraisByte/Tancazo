@@ -5,3 +5,7 @@ npm-debug.log*
 
 # The reviewed reference is intentionally kept outside this project's history.
 mareatinta-review/
+
+# Python audio generation helpers
+__pycache__/
+*.pyc

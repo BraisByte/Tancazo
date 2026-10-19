@@ -61,12 +61,13 @@ test('tank collision follows the solid quadrants of damaged bricks', () => {
   assert.ok(player.x < 2.9, `tank crossed a remaining brick quadrant at x=${player.x}`);
 });
 
-test('the fortified base withstands two hits and falls on the third', () => {
+test('the protected core withstands three hits and falls on the fourth', () => {
   const game = createGame({ players: 1, seed: 9 });
-  for (let hit = 1; hit <= 3; hit++) {
+  for (let hit = 1; hit <= 4; hit++) {
     game.bullets.push({ id: `base-shot-${hit}`, owner: 'enemy', team: 'enemies', type: 'cannon', x: 7.5, z: 13.5, dx: 0, dz: 0, speed: 0, damage: 1, life: 1, penetration: 0, bounces: 0, blast: 0 });
     advance(game, STEP, {});
-    if (hit < 3) assert.equal(game.status, 'playing');
+    assert.equal(game.baseHp, 4 - hit);
+    if (hit < 4) assert.equal(game.status, 'playing');
   }
   assert.equal(game.status, 'defeat');
   assert.equal(game.baseHp, 0);

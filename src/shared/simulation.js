@@ -2,6 +2,7 @@ import { GARAGE_PARTS, campaignMission, normalizeUpgrades } from './campaign.js?
 import { cloneMap, TILE } from './maps.js?v=22';
 
 export const STEP = 1 / 60;
+export const CORE_HITS = 4;
 export const MAX_PLAYERS = 4;
 export const DIFFICULTIES = Object.freeze({
   easy: { id: 'easy', name: 'Patrulla', enemies: 8, maxAlive: 2, speed: .78, fire: .55, aim: .42, range: .84, drop: .5 },
@@ -67,7 +68,7 @@ export function createGame(options = {}) {
     maxEnemies: challenge.maxAlive, difficulty: challenge.id,
     bossEnabled: objective === 'boss' || (!mission && difficulty === 'hard'), bossSpawned: false,
     spawnTimer: .5, nextEntityId: 1, score: 0, teamKills: 0, teamRank: 1,
-    baseHp: 3, baseMaxHp: 3, baseShieldTimer: 0, basePosition,
+    baseHp: CORE_HITS, baseMaxHp: CORE_HITS, baseShieldTimer: 0, basePosition,
     capture: objective === 'capture' ? { x: mission?.target?.[0] || map.width / 2, z: mission?.target?.[1] || map.height / 2, progress: 0, goal: mission?.duration || 35 } : null,
     rescue: objective === 'rescue' ? { extraction: mission?.extraction || [map.width / 2, 1.5], rescued: 0, total: mission?.targets?.length || 2 } : null,
     upgrades: normalizeUpgrades(options.upgrades), loadout, runPerks: { ...(options.runPerks || {}) },
@@ -351,7 +352,9 @@ function pathDirection(state, tank, target) {
     for (const [dx, dz] of DIRECTIONS) {
       const nextCol = col + dx, nextRow = row + dz, key = `${nextCol}:${nextRow}`;
       if (previous.has(key) || nextRow < 1 || nextRow >= state.map.height - 1 || nextCol < 1 || nextCol >= state.map.width - 1) continue;
-      if (blocksTank(state.map.tiles[nextRow][nextCol])) continue;
+      const tile = state.map.tiles[nextRow][nextCol];
+      const breach = target.kind === 'base' && (tile === TILE.BRICK || tile === TILE.BARREL || tile === TILE.DOOR && (WEAPONS[tank.weapon]?.damage >= 2 || WEAPONS[tank.weapon]?.blast));
+      if (blocksTank(tile) && !breach) continue;
       previous.set(key, `${col}:${row}`);
       queue.push([nextCol, nextRow]);
     }
@@ -369,11 +372,13 @@ function enemyTarget(state, tank) {
     ...state.decoys.map((decoy) => ({ ...decoy, kind: 'decoy', vx: 0, vz: 0 })),
   ];
   const nearest = candidates.sort((first, second) => Math.hypot(first.x - tank.x, first.z - tank.z) - Math.hypot(second.x - tank.x, second.z - tank.z))[0];
+  if (tank.targetObjective === 'base' && state.capture) return { x: state.capture.x, z: state.capture.z, vx: 0, vz: 0, kind: 'capture' };
   if (tank.targetObjective === 'base' && state.basePosition) return { x: state.basePosition.x, z: state.basePosition.z - 1.6, vx: 0, vz: 0, kind: 'base' };
   return nearest || (state.basePosition ? { x: state.basePosition.x, z: state.basePosition.z - 1.6, vx: 0, vz: 0, kind: 'base' } : { x: state.map.width / 2, z: state.map.height - 2, vx: 0, vz: 0 });
 }
 
 function chooseEnemyDirection(state, tank, target) {
+  if (target.kind === 'capture' && Math.hypot(target.x - tank.x, target.z - tank.z) < .65) return [0, 0];
   const incoming = state.bullets.find((bullet) => bullet.team === 'players' && Math.hypot(bullet.x - tank.x, bullet.z - tank.z) < 2.2 && bullet.dx * (tank.x - bullet.x) + bullet.dz * (tank.z - bullet.z) > .2);
   if (incoming && tank.role !== 'heavy') {
     const dodge = [[-incoming.dz, incoming.dx], [incoming.dz, -incoming.dx]].map(([dx, dz]) => [Math.sign(dx), Math.sign(dz)]).find(([dx, dz]) => canOccupy(state, tank.x + dx * .52, tank.z + dz * .52, tank));
@@ -396,7 +401,7 @@ function chooseEnemyDirection(state, tank, target) {
     if (canOccupy(state, tank.x + direct[0] * .45, tank.z + direct[1] * .45, tank)) return direct;
   }
   const formation = [[0, 0], [-1.2, .6], [1.2, .6]][Math.abs(tank.squadId || 0) % 3];
-  const flank = tank.role === 'scout' ? { x: target.x + formation[0] * 1.5, z: target.z + formation[1] * 1.5 } : { x: target.x + formation[0], z: target.z + formation[1] };
+  const flank = tank.role === 'scout' ? { ...target, x: target.x + formation[0] * 1.5, z: target.z + formation[1] * 1.5 } : { ...target, x: target.x + formation[0], z: target.z + formation[1] };
   return pathDirection(state, tank, flank);
 }
 
@@ -435,18 +440,23 @@ function enemyInput(state, tank, dt) {
     }
   }
   if (tank.role === 'commander') for (const ally of state.tanks.filter((candidate) => candidate.team === 'enemies' && candidate.alive && Math.hypot(candidate.x - tank.x, candidate.z - tank.z) < 2.5)) ally.cooldown = Math.max(0, ally.cooldown - dt * .35);
-  const combatTarget = target.kind === 'base' && state.basePosition ? { ...state.basePosition, vx: 0, vz: 0 } : target;
-  const distance = Math.hypot(combatTarget.x - tank.x, combatTarget.z - tank.z);
+  const nearbyDefender = target.kind === 'capture' ? state.tanks.filter((candidate) => candidate.team === 'players' && candidate.alive).sort((a, b) => Math.hypot(a.x - tank.x, a.z - tank.z) - Math.hypot(b.x - tank.x, b.z - tank.z))[0] : null;
+  const combatTarget = target.kind === 'base' && state.basePosition ? { ...state.basePosition, vx: 0, vz: 0 } : nearbyDefender || target;
   const challenge = DIFFICULTIES[state.difficulty];
   const range = (tank.role === 'sniper' ? 9 : tank.role === 'heavy' ? 6.5 : 5.5) * challenge.range;
-  const visible = distance <= range && hasLineOfSight(state, tank, combatTarget);
+  // Base attackers must shoot the destructible bunker instead of waiting for it to vanish.
+  const obstruction = target.kind === 'base' ? projectileCollision(state, tank.x, tank.z, combatTarget.x, combatTarget.z) : null;
+  const distance = Math.hypot((obstruction?.x ?? combatTarget.x) - tank.x, (obstruction?.z ?? combatTarget.z) - tank.z);
+  const canBreach = obstruction && (obstruction.tile === TILE.BASE || obstruction.tile === TILE.BRICK || obstruction.tile === TILE.BARREL || obstruction.tile === TILE.DOOR && (WEAPONS[tank.weapon]?.damage >= 2 || WEAPONS[tank.weapon]?.blast));
+  const visible = distance <= range && (target.kind === 'base' ? !obstruction || canBreach : (target.kind !== 'capture' || !!nearbyDefender) && hasLineOfSight(state, tank, combatTarget));
   tank.aimLock = visible ? (tank.aimLock || 0) + dt : 0;
   const prediction = (tank.role === 'sniper' ? .32 : .16) * challenge.range;
   const aimX = combatTarget.x + (combatTarget.vx || 0) * prediction - tank.x;
   const aimZ = combatTarget.z + (combatTarget.vz || 0) * prediction - tank.z;
   const fire = visible && tank.cooldown <= 0 && tank.aimLock >= challenge.aim;
   if (fire) tank.aimLock = 0;
-  return { x: tank.aiX || 0, z: tank.aiZ || 0, aimX, aimZ, fire };
+  const holdingFirePosition = target.kind === 'base' && visible;
+  return { x: holdingFirePosition ? 0 : tank.aiX || 0, z: holdingFirePosition ? 0 : tank.aiZ || 0, aimX, aimZ, fire };
 }
 
 function bossInput(state, tank, dt) {
@@ -517,7 +527,7 @@ function spawnEnemy(state) {
     speed: profile.speed * DIFFICULTIES[state.difficulty].speed,
     shield: profile.role === 'commander' ? 1 : 0, recoil: 0, aiTimer: 0, aimLock: 0,
     weapons: [profile.weapon], reload: 1, squadId: Math.floor(state.teamKills / 3),
-    targetObjective: profile.role === 'heavy' || assaultIndex % 3 === 1 ? 'base' : 'players',
+    targetObjective: profile.role === 'heavy' || assaultIndex % 3 !== 0 ? 'base' : 'players',
   });
   state.enemiesToSpawn--;
   return true;
@@ -680,9 +690,22 @@ function updateBullets(state, dt) {
     if (collision?.tile === TILE.BASE) {
       bullet.life = 0;
       const col = collision.col, row = collision.row;
-      if (bullet.team === 'enemies' && state.baseShieldTimer <= 0) state.baseHp = Math.max(0, state.baseHp - bullet.damage);
-      state.effects.push({ type: state.baseShieldTimer > 0 ? 'shield' : 'base', x: col + .5, z: row + .5, tick: state.tick });
-      if (state.baseHp <= 0) { state.map.tiles[row][col] = TILE.EMPTY; state.status = 'defeat'; }
+      if (bullet.team !== 'enemies') {
+        state.effects.push({ type: 'spark', x: col + .5, z: row + .5, tick: state.tick });
+      } else if (state.baseShieldTimer > 0) {
+        state.effects.push({ type: 'shield', x: col + .5, z: row + .5, tick: state.tick });
+      } else {
+        state.baseHp = Math.max(0, state.baseHp - 1);
+        state.effects.push({ type: state.baseHp ? 'core-hit' : 'base', x: col + .5, z: row + .5, tick: state.tick });
+        if (!state.baseHp) {
+          state.map.tiles[row][col] = TILE.EMPTY;
+          state.status = 'defeat';
+          for (const player of state.tanks.filter((tank) => tank.kind === 'player')) {
+            if (player.alive) state.effects.push({ type: 'boom', x: player.x, z: player.z, tick: state.tick });
+            Object.assign(player, { hp: 0, alive: false, downed: false, respawn: 0, reviveProgress: 0, vx: 0, vz: 0 });
+          }
+        }
+      }
       continue;
     }
     const target = state.tanks.find((tank) => tank.alive && tank.team !== bullet.team && Math.hypot(tank.x - bullet.x, tank.z - bullet.z) < tankRadius(tank) + BULLET_RADIUS);
@@ -889,7 +912,11 @@ export function advance(state, dt, inputs = {}) {
     if (tank.frozenTimer <= 0) moveTank(state, tank, input, dt);
     if (input.fire && tank.empTimer <= 0 && tank.frozenTimer <= 0) shoot(state, tank);
   }
-  updateBullets(state, dt); updatePowerups(state, dt); updateDeployables(state, dt); updateHazards(state, dt); updateCapture(state, dt); updateRescue(state, dt); respawnPlayers(state, dt);
+  updateBullets(state, dt);
+  if (state.status === 'defeat') return state;
+  updatePowerups(state, dt); updateDeployables(state, dt); updateHazards(state, dt); updateCapture(state, dt); updateRescue(state, dt); respawnPlayers(state, dt);
+  // Losing the protected core takes precedence over every objective completed this tick.
+  if (state.status === 'defeat') return state;
   const hostileAlive = state.tanks.some((tank) => tank.team === 'enemies' && tank.alive);
   if (state.objective === 'survive' && state.elapsed >= state.duration) state.status = 'victory';
   else if (state.objective === 'capture' && state.capture.progress >= state.capture.goal) state.status = 'victory';

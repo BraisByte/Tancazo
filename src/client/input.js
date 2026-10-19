@@ -1,6 +1,25 @@
 const held = new Set();
 const pressed = new Set();
 const touch = new Set();
+const pointer = { x: 0, y: 0, active: false, fire: false };
+let pointerEnabled = false;
+const battlefield = document.querySelector('#game');
+export function enablePointer(enabled) {
+  pointerEnabled = enabled;
+  battlefield.classList.toggle('mouse-aim', enabled);
+  if (!enabled) { pointer.active = false; pointer.fire = false; }
+}
+battlefield.addEventListener('pointermove', (event) => {
+  if (!pointerEnabled || event.pointerType !== 'mouse') return;
+  pointer.x = event.clientX; pointer.y = event.clientY; pointer.active = true;
+});
+battlefield.addEventListener('pointerdown', (event) => {
+  if (!pointerEnabled || event.pointerType !== 'mouse' || event.button !== 0) return;
+  pointer.x = event.clientX; pointer.y = event.clientY; pointer.active = true; pointer.fire = true;
+});
+addEventListener('pointerup', () => { pointer.fire = false; });
+battlefield.addEventListener('pointerleave', () => { pointer.active = false; pointer.fire = false; });
+addEventListener('pointercancel', () => { pointer.active = false; pointer.fire = false; touch.clear(); });
 let bindings = [
   { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', fire: 'Space', switch: 'KeyQ', use: 'KeyE', ultimate: 'KeyF', touch: true },
   { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', fire: 'Enter', switch: 'ShiftRight', use: 'Slash', ultimate: 'Numpad0' },
@@ -14,12 +33,13 @@ export function setBindings(next) {
 export function getBindings() { return bindings.map((entry) => ({ ...entry })); }
 
 addEventListener('keydown', (event) => {
-  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) event.preventDefault();
+  if (event.target?.matches?.('input, textarea, select')) return;
+  if (document.body.classList.contains('playing') && ['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) event.preventDefault();
   if (!held.has(event.code)) pressed.add(event.code);
   held.add(event.code);
 });
 addEventListener('keyup', (event) => held.delete(event.code));
-addEventListener('blur', () => held.clear());
+addEventListener('blur', () => { held.clear(); pressed.clear(); touch.clear(); pointer.active = false; pointer.fire = false; });
 
 function keyboard(codes) {
   return {
@@ -48,11 +68,15 @@ function gamepad(index) {
   return Object.values(input).some(Boolean) ? input : null;
 }
 
-export function readLocalInputs(playerIds) {
+export function readLocalInputs(playerIds, pointerAim) {
   const controls = [
     keyboard(bindings[0]),
     keyboard(bindings[1]),
   ];
+  if (pointerEnabled && pointer.active && pointerAim) {
+    const aim = pointerAim(pointer.x, pointer.y);
+    if (aim) Object.assign(controls[0], aim, { fire: controls[0].fire || pointer.fire });
+  }
   for (let index = 0; index < playerIds.length; index++) controls[index] = gamepad(index) || controls[index] || controls[0];
   return Object.fromEntries(playerIds.map((id, index) => [id, controls[index]]));
 }

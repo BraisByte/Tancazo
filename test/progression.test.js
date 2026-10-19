@@ -2,6 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { completeMission, equipPart, loadProgress } from '../src/client/progression.js';
 
+test('a storage failure preserves victory, rewards and continuation in memory', () => {
+  globalThis.localStorage = { getItem: () => null, setItem: () => { throw new Error('Quota exceeded'); } };
+  try {
+    const progress = loadProgress();
+    assert.ok(completeMission(progress, 'green-line', { status: 'victory', score: 1000, tanks: [{ kind: 'player', alive: true, hp: 3, maxHp: 3 }] }) > 0);
+    assert.equal(progress.saveFailed, true);
+    assert.ok(progress.unlockedMissions.includes('red-forge'));
+    assert.ok(progress.stars['green-line'] > 0);
+  } finally { delete globalThis.localStorage; }
+});
+
 test('winning the second campaign mission unlocks the third', () => {
   let saved = '';
   globalThis.localStorage = {

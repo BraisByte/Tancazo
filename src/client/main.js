@@ -1,10 +1,14 @@
-import { ITEMS, RANKS, STEP, advance, createGame } from '../shared/simulation.js?v=22';
+import { ITEMS, RANKS, STEP, advance, createGame } from '../shared/simulation.js?v=27';
 import { CAMPAIGN, GARAGE_PARTS, RUN_PERKS, UPGRADES } from '../shared/campaign.js?v=22';
-import { readLocalInputs, consume, getBindings, setBindings } from './input.js?v=22';
-import { GameRenderer } from './render.js?v=22';
-import { GameAudio } from './audio.js?v=22';
-import { buyUpgrade, completeMission, equipPart, fabricatePart, loadProgress } from './progression.js?v=22';
+import { readLocalInputs, consume, getBindings, setBindings, enablePointer } from './input.js?v=23';
+import { GameRenderer } from './render.js?v=27';
+import { GameAudio } from './audio.js?v=27';
+import { buyUpgrade, completeMission, equipPart, fabricatePart, loadProgress } from './progression.js?v=24';
 import { EDITOR_TILES, defaultDraft, draftToMap, mapToDraft } from './editor.js?v=22';
+
+import { radioMessage } from './radio.js?v=27';
+import { nextBattle } from './gameflow.js?v=24';
+import { beginTraining, updateTraining, trainingInstruction } from './tutorial.js?v=23';
 
 const $ = (selector) => document.querySelector(selector);
 const ui = {
@@ -39,9 +43,11 @@ let last = performance.now();
 let lastPing = 0;
 let latency = 0;
 let shownResult = false;
+let training = null;
+let lastLocalOptions = {};
+let lastLocalCount = 1;
 let campaignStars = 0;
 let campaignMissionId = null;
-let campaignAdvanceTimer = null;
 let runPerks = {};
 let lastNoticeKey = '';
 let noticeUntil = 0;
@@ -52,8 +58,8 @@ let progress = loadProgress();
 let preferences;
 try {
   const saved = JSON.parse(localStorage.getItem('tancazo.settings') || '{}');
-  preferences = { music: saved.music ?? saved.volume ?? 70, effects: saved.effects ?? saved.volume ?? 70, radio: true, ui: 100, shake: true, contrast: false, aim: false, bindings: getBindings(), ...saved };
-} catch { preferences = { music: 70, effects: 70, radio: true, ui: 100, shake: true, contrast: false, aim: false, bindings: getBindings() }; }
+  preferences = { music: saved.music ?? saved.volume ?? 70, effects: saved.effects ?? saved.volume ?? 70, radio: true, ui: 100, shake: true, contrast: false, mouse: true, aim: false, bindings: getBindings(), ...saved };
+} catch { preferences = { music: 70, effects: 70, radio: true, ui: 100, shake: true, contrast: false, mouse: true, aim: false, bindings: getBindings() }; }
 
 function applyPreferences() {
   audio.setVolumes(preferences.music / 100, preferences.effects / 100);
@@ -68,10 +74,16 @@ function applyPreferences() {
   $('#setting-shake').checked = preferences.shake;
   $('#setting-contrast').checked = preferences.contrast;
   $('#setting-aim').checked = preferences.aim;
+  $('#setting-mouse').checked = preferences.mouse;
   ui.musicShortcut.textContent = `♪ Música adaptativa · ${preferences.music}%`;
   setBindings(preferences.bindings || getBindings());
   renderBindings();
 }
+
+$('#preview-voice').addEventListener('click', () => {
+  audio.stopRadio(); audio.lastRadio = '';
+  audio.radio('Unidade danada. Busca cobertura.');
+});
 
 function renderBindings() {
   const names = { up: 'Arriba', down: 'Abaixo', left: 'Esquerda', right: 'Dereita', fire: 'Disparo', switch: 'Arma', use: 'Obxecto', ultimate: 'Definitiva' };
@@ -106,6 +118,7 @@ function hidePanels() {
 
 function setPlaying(nextMode) {
   mode = nextMode;
+  enablePointer(preferences.mouse && (nextMode.startsWith('local') || (nextMode === 'online' && !isSpectator)));
   shownResult = false;
   campaignStars = 0;
   hidePanels();
@@ -119,8 +132,11 @@ function setPlaying(nextMode) {
 }
 
 function startLocal(players, options = {}) {
-  clearTimeout(campaignAdvanceTimer);
-  campaignAdvanceTimer = null;
+  accumulator = 0;
+  lastLocalCount = players;
+  lastLocalOptions = { ...options };
+  training = null;
+  $('#training-guide').classList.add('hidden');
   socket?.close();
   socket = null;
   campaignMissionId = options.missionId || null;
@@ -134,6 +150,7 @@ function startLocal(players, options = {}) {
     loadout: progress.loadout,
     runPerks,
   });
+  if (options.training) training = beginTraining(game);
   localPlayers = game.tanks.filter((tank) => tank.kind === 'player').map((tank) => tank.id);
   setPlaying(players > 1 ? 'local2' : 'local1');
 }
@@ -246,7 +263,7 @@ function currentOnlineInputs() {
 }
 
 function assistedInputs(ids) {
-  const values = readLocalInputs(ids);
+  const values = readLocalInputs(ids, (x, y) => view.aimAt(x, y, game.tanks.find((tank) => tank.id === ids[0])));
   if (!preferences.aim) return values;
   const enemies = game.tanks.filter((tank) => tank.team === 'enemies' && tank.alive);
   for (const id of ids) {
@@ -291,7 +308,8 @@ function drawMinimap() {
 }
 
 function updateNotices() {
-  const radioMessages = { ultimate: 'HABILIDADE DEFINITIVA ACTIVADA', critical: 'IMPACTO TRASEIRO · SISTEMAS DANADOS', rescue: 'SUPERVIVENTE LOCALIZADO · ESCOLTA Á EXTRACCIÓN', revive: 'UNIDADE REANIMADA', boss: 'ALERTA · NOVA FASE DO LEVIATÁN' };
+  if (game.status !== 'playing') { ui.notice.classList.add('hidden'); return; }
+  const radioMessages = { 'core-hit': `NÚCLEO BAIXO ATAQUE · RESISTENCIA ${game.baseHp}/${game.baseMaxHp}`, ultimate: 'HABILIDADE DEFINITIVA ACTIVADA', critical: 'IMPACTO TRASEIRO · SISTEMAS DANADOS', rescue: 'SUPERVIVENTE LOCALIZADO · ESCOLTA Á EXTRACCIÓN', revive: 'UNIDADE REANIMADA', boss: 'ALERTA · NOVA FASE DO LEVIATÁN' };
   const effect = [...(game.effects || [])].reverse().find((candidate) => candidate.type === 'pickup' || candidate.type === 'rank' || ITEMS[candidate.type] || radioMessages[candidate.type]);
   if (effect) {
     const key = `${effect.tick}:${effect.type}:${effect.powerup || ''}`;
@@ -306,7 +324,7 @@ function updateNotices() {
       else ui.notice.textContent = `${ITEMS[effect.type].name.toUpperCase()} ACTIVADO`;
       noticeUntil = performance.now() + 2200;
       ui.notice.classList.remove('hidden');
-      audio.radio(ui.notice.textContent);
+      audio.radio(radioMessage(effect, game.teamRank));
     }
   }
   if (noticeUntil && performance.now() >= noticeUntil) ui.notice.classList.add('hidden');
@@ -332,10 +350,10 @@ function updateHud() {
     ui.enemies.textContent = String((game.enemiesToSpawn || 0) + alive).padStart(2, '0');
   }
   ui.difficulty.textContent = ({ easy: 'PATRULLA', normal: 'ASEDIO', hard: 'TORMENTA' })[game.difficulty] || 'ASEDIO';
-  ui.musicScene.textContent = game.bossSpawned ? 'LEVIATÁN' : ({ citadel: 'CIUDADELA', foundry: 'FORXA', delta: 'DELTA', glacier: 'GLACIAR', marsh: 'PANTANO', arsenal: 'ARSENAL', fortress: 'FORTALEZA' })[game.map.id] || 'CAMPO';
+  ui.musicScene.textContent = audio.trackTitles[audio.trackKey] || (game.bossSpawned ? 'LEVIATÁN' : ({ citadel: 'CIUDADELA', foundry: 'FORXA', delta: 'DELTA', glacier: 'GLACIAR', marsh: 'PANTANO', arsenal: 'ARSENAL', fortress: 'FORTALEZA' })[game.map.id] || 'CAMPO');
   const objectiveText = game.objective === 'survive' ? 'RESISTE ATA A EVACUACIÓN' : game.objective === 'escort' ? 'ESCOLTA O TRANSPORTE' : game.objective === 'capture' ? 'MANTÉN A BALIZA' : game.objective === 'generators' ? 'DESTRÚE OS XERADORES' : game.objective === 'rescue' ? 'RESCATA E EXTRAE A COLUMNA' : game.bossSpawned ? 'ROMPE OS PUNTOS DÉBILES DO LEVIATÁN' : 'DEFENDE O NÚCLEO';
-  ui.status.textContent = game.status === 'playing' ? objectiveText : game.status === 'victory' ? 'SECTOR ASEGURADO' : 'NÚCLEO DESTRUÍDO';
-  ui.baseHealth.textContent = `${'◆'.repeat(Math.max(0, game.baseHp || 0))}${'◇'.repeat(Math.max(0, (game.baseMaxHp || 3) - (game.baseHp || 0)))}${game.baseShieldTimer > 0 ? ' · ESCUDO' : ''}`;
+  ui.status.textContent = game.status === 'playing' ? objectiveText : game.status === 'victory' ? 'SECTOR ASEGURADO' : 'OPERACIÓN FALLIDA';
+  ui.baseHealth.textContent = `${'◆'.repeat(Math.max(0, game.baseHp || 0))}${'◇'.repeat(Math.max(0, (game.baseMaxHp || 4) - (game.baseHp || 0)))} · ${game.baseHp}/${game.baseMaxHp}${game.baseShieldTimer > 0 ? ` · ESCUDO ${Math.ceil(game.baseShieldTimer)}s` : ''}`;
   const rank = RANKS[(game.teamRank || 1) - 1] || RANKS[0];
   const nextRank = RANKS[game.teamRank || 1];
   ui.teamRank.textContent = `${['I', 'II', 'III', 'IV', 'V'][rank.rank - 1]} · ${game.teamKills || 0}${nextRank ? `/${nextRank.kills}` : ' · MÁX'}`;
@@ -355,38 +373,52 @@ function updateHud() {
     const health = document.createElement('i'); health.className = 'health-pips';
     health.textContent = `${'◆'.repeat(Math.max(0, tank.hp))}${'◇'.repeat(Math.max(0, tank.maxHp - tank.hp))}`;
     const item = tank.item ? ` · Obxecto: ${ITEMS[tank.item]?.name || tank.item}` : '';
-    const damage = tank.trackDamage > 0 ? ' · ORUGAS DANADAS' : tank.turretDamage > 0 ? ' · TORRETA DANADA' : tank.burningTimer > 0 ? ' · INCENDIO' : '';
+    const damage = [tank.trackDamage > 0 && 'ORUGAS DANADAS', tank.turretDamage > 0 && 'TORRETA DANADA', tank.burningTimer > 0 && 'INCENDIO'].filter(Boolean).map((text) => ` · ${text}`).join('');
     const downed = tank.downed ? ` · CAÍDO ${Math.ceil(tank.respawn || 0)}s` : '';
     status.append(health, document.createTextNode(` · ${tank.weapon || 'cannon'}${tank.shield ? ` · escudo ${tank.shield}` : ''}${tank.kind === 'player' ? ` · R${tank.rank || 1}${item}${damage}${downed}` : tank.kind === 'survivor' ? (tank.activated ? ' · EN MARCHA' : ' · POR LOCALIZAR') : ''}`));
     chip.append(name, status); return chip;
   }));
+}
+
+function updateResult() {
   if (game.status !== 'playing' && !shownResult) {
     shownResult = true;
     if (campaignMissionId) campaignStars = completeMission(progress, campaignMissionId, game);
-    setTimeout(() => {
-      ui.resultTitle.textContent = game.status === 'victory' ? 'VICTORIA' : 'DERROTA';
-      const missionIndex = CAMPAIGN.findIndex((mission) => mission.id === campaignMissionId);
-      const mission = CAMPAIGN[missionIndex];
-      const unlockCopy = campaignMissionId && game.status === 'victory' && mission?.reward ? ` · Recompensa: ${mission.reward.name}` : '';
-      ui.resultCopy.textContent = `Puntuación: ${String(game.score || 0).padStart(6, '0')}${campaignMissionId && game.status === 'victory' ? ` · ${'★'.repeat(campaignStars)}${'☆'.repeat(3 - campaignStars)}` : ''}${unlockCopy}`;
-      const me = currentLobby?.clients.find((client) => client.clientId === clientId);
-      $('#restart').disabled = mode === 'online' && !me?.host;
-      $('#restart').textContent = mode === 'online' && !me?.host ? 'Agardando o anfitrión' : campaignMissionId && game.status === 'victory' && mission?.next?.length ? (mission.next.length > 1 ? 'Continuar pola ruta principal' : 'Seguinte misión') : 'Xogar de novo';
-      $('#result-campaign').classList.toggle('hidden', !campaignMissionId);
-      $('#back').textContent = campaignMissionId ? 'Seleccionar misión' : 'Volver ao menú';
-      ui.result.classList.remove('hidden');
-      if (campaignMissionId && game.status === 'victory' && mission?.next?.length) {
-        renderPerkChoices();
-        ui.resultCopy.textContent += ' · Avance automático en 8 segundos';
-        clearTimeout(campaignAdvanceTimer);
-        campaignAdvanceTimer = setTimeout(() => { grantRunPerk(Object.keys(RUN_PERKS)[0]); startNextCampaignMission(); }, 8000);
-      } else $('#perk-choices').classList.add('hidden');
-    }, 500);
+    enablePointer(false);
+    $('#training-guide').classList.add('hidden');
+    audio.stopRadio();
+    ui.resultTitle.textContent = game.status === 'victory' ? 'VICTORIA' : 'DERROTA';
+    const missionIndex = CAMPAIGN.findIndex((mission) => mission.id === campaignMissionId);
+    const mission = CAMPAIGN[missionIndex];
+    const unlockCopy = campaignMissionId && game.status === 'victory' && mission?.reward ? ` · Recompensa: ${mission.reward.name}` : '';
+    ui.resultCopy.textContent = `Puntuación: ${String(game.score || 0).padStart(6, '0')}${campaignMissionId && game.status === 'victory' ? ` · ${'★'.repeat(campaignStars)}${'☆'.repeat(3 - campaignStars)}` : ''}${unlockCopy}`;
+    const elapsed = Math.floor(game.elapsed || 0);
+    $('#result-stats').textContent = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')} · ${game.teamKills || 0} baixas · Núcleo ${game.baseHp}/${game.baseMaxHp}`;
+    const lostConvoy = game.tanks.some((tank) => tank.kind === 'convoy' && !tank.alive);
+    const lostSurvivor = game.tanks.some((tank) => tank.kind === 'survivor' && !tank.alive);
+    $('#result-advice').textContent = game.status === 'victory' ? (training ? 'Adestramento completado. Xa podes comezar a campaña ou xogar en cooperativo.' : 'Sector asegurado. Proba outra configuración no garaxe para cambiar de táctica.') : game.baseHp <= 0 ? 'O núcleo foi destruído. Vixía os accesos e reserva Fortaleza para os momentos de perigo.' : lostConvoy ? 'O transporte foi destruído. Avanza ao seu lado e despexa o camiño antes de escoltalo.' : lostSurvivor ? 'Perdeuse un supervivente. Elimina as ameazas antes de iniciar a extracción.' : 'A operación fallou. Usa as coberturas e evita expoñer a parte traseira do tanque.';
+    const me = currentLobby?.clients.find((client) => client.clientId === clientId);
+    $('#restart').disabled = mode === 'online' && !me?.host;
+    const next = nextBattle(game, { training: !!training, missionId: campaignMissionId });
+    $('#restart').textContent = mode === 'online' ? (me?.host ? 'Xogar de novo' : 'Agardando o anfitrión') : next ? (training ? 'Comezar campaña' : next.missionId ? 'Seguinte misión' : 'Seguinte campo') : 'Reintentar';
+    if (game.status === 'victory' && !campaignMissionId && !training && next) $('#result-advice').textContent = 'Campo superado. Continúa no seguinte escenario ou volve ao menú.';
+    if (campaignMissionId && game.status === 'victory' && !next) $('#result-advice').textContent = 'Campaña completada. Todos os sectores están asegurados.';
+    if (progress.saveFailed) ui.resultCopy.textContent += ' · Non se puido gardar: o avance consérvase nesta sesión.';
+    $('#result-campaign').classList.toggle('hidden', !campaignMissionId);
+    $('#back').textContent = campaignMissionId ? 'Seleccionar misión' : 'Volver ao menú';
+    ui.result.classList.remove('hidden');
+    if (campaignMissionId && game.status === 'victory' && mission?.next?.length) {
+      renderPerkChoices();
+      ui.resultCopy.textContent += ' · Escolle unha subministración para continuar';
+    } else $('#perk-choices').classList.add('hidden');
   }
 }
 
 function returnToMenu() {
-  clearTimeout(campaignAdvanceTimer); campaignAdvanceTimer = null;
+  audio.stopRadio();
+  training = null;
+  enablePointer(false);
+  $('#training-guide').classList.add('hidden');
   runPerks = {};
   clearTimeout(reconnectTimer); reconnectTimer = null;
   socket?.close(); socket = null; onlinePlayers = []; clientId = null; currentLobby = null; isSpectator = false;
@@ -398,6 +430,8 @@ function returnToMenu() {
 }
 
 function openPanel(panel, nextMode) {
+  enablePointer(false);
+  $('#training-guide').classList.add('hidden');
   hidePanels();
   ui.hud.classList.add('hidden'); ui.playerStatus.classList.add('hidden'); ui.battleStatus.classList.add('hidden'); ui.minimap.classList.add('hidden'); ui.notice.classList.add('hidden');
   document.body.classList.remove('playing');
@@ -405,7 +439,6 @@ function openPanel(panel, nextMode) {
 }
 
 function openCampaignSelector() {
-  clearTimeout(campaignAdvanceTimer); campaignAdvanceTimer = null;
   renderCampaign();
   openPanel(ui.campaign, 'campaign');
 }
@@ -430,14 +463,14 @@ function renderPerkChoices() {
   container.replaceChildren(...choices.map(([id, perk]) => {
     const button = document.createElement('button');
     button.textContent = `${perk.name} · ${perk.description}`;
-    button.addEventListener('click', () => { clearTimeout(campaignAdvanceTimer); grantRunPerk(id); startNextCampaignMission(); });
+    button.addEventListener('click', () => { grantRunPerk(id); startNextCampaignMission(); });
     return button;
   }));
   container.classList.remove('hidden');
 }
 
 function renderCampaign() {
-  progress = loadProgress();
+  if (!progress.saveFailed) progress = loadProgress();
   ui.medals.textContent = progress.medals;
   ui.campaignProgress.textContent = `${Object.keys(progress.stars).length}/${CAMPAIGN.length}`;
   const displayOrder = ['green-line', 'red-forge', 'silent-depot', 'frozen-pass', 'iron-convoy', 'emerald-marsh', 'broken-arsenal', 'ghost-rescue', 'last-bastion', 'command-gate', 'cobalt-heart'];
@@ -469,7 +502,7 @@ function renderCampaign() {
 }
 
 function renderGarage() {
-  progress = loadProgress();
+  if (!progress.saveFailed) progress = loadProgress();
   const selected = progress.loadout;
   const chassis = GARAGE_PARTS.chassis[selected.chassis], turret = GARAGE_PARTS.turret[selected.turret], engine = GARAGE_PARTS.engine[selected.engine], ultimate = GARAGE_PARTS.ultimate[selected.ultimate];
   ui.garageSummary.textContent = `${chassis.name} · ${turret.name} · ${engine.name} · ${ultimate.name} — Vida ${Math.max(2, 3 + chassis.hp + (progress.upgrades.armor || 0))}, velocidade ×${(chassis.speed * engine.speed).toFixed(2)}, recarga ×${turret.reload.toFixed(2)}.`;
@@ -539,7 +572,7 @@ $('#editor-back').addEventListener('click', returnToMenu);
 $('#settings-back').addEventListener('click', () => {
   preferences = {
     music: Number($('#setting-music').value), effects: Number($('#setting-effects').value), ui: Number($('#setting-ui').value),
-    radio: $('#setting-radio').checked, shake: $('#setting-shake').checked, contrast: $('#setting-contrast').checked, aim: $('#setting-aim').checked,
+    radio: $('#setting-radio').checked, shake: $('#setting-shake').checked, contrast: $('#setting-contrast').checked, aim: $('#setting-aim').checked, mouse: $('#setting-mouse').checked,
     bindings: getBindings(),
   };
   localStorage.setItem('tancazo.settings', JSON.stringify(preferences));
@@ -577,15 +610,20 @@ function sendLobbySettings() {
 }
 ui.lobbyMap.addEventListener('change', sendLobbySettings);
 ui.lobbyDifficulty.addEventListener('change', sendLobbySettings);
+$('#training').addEventListener('click', () => startLocal(1, { training: true, mapId: 'citadel', difficulty: 'easy' }));
+
 $('#restart').addEventListener('click', () => {
   ui.result.classList.add('hidden'); shownResult = false;
   if (mode === 'online') socket?.send(JSON.stringify({ type: 'restart' }));
   else if (startNextCampaignMission()) return;
-  else if (customMap && game.map.id === 'custom') startLocal(1, { map: customMap });
-  else startLocal(mode === 'local2' ? 2 : 1);
+  else {
+    const next = nextBattle(game, { training: !!training, missionId: campaignMissionId });
+    startLocal(lastLocalCount, next || lastLocalOptions);
+  }
 });
 
 const autostart = new URLSearchParams(location.search).get('autostart');
+if (autostart === 'training') startLocal(1, { training: true, mapId: 'citadel', difficulty: 'easy' });
 if (autostart === 'solo') startLocal(1);
 if (autostart === 'local') startLocal(2);
 if (autostart === 'host') connect(true);
@@ -602,6 +640,7 @@ function frame(now) {
     accumulator += dt;
     while (accumulator >= STEP) {
       advance(game, STEP, assistedInputs(localPlayers));
+      if (training) updateTraining(training, game);
       accumulator -= STEP;
     }
   } else if (mode === 'online' && socket?.readyState === WebSocket.OPEN) {
@@ -614,8 +653,19 @@ function frame(now) {
     if (campaignMissionId && mode.startsWith('local')) openCampaignSelector();
     else returnToMenu();
   }
+  if (training && mode.startsWith('local') && game.status === 'playing') {
+    $('#training-guide').classList.remove('hidden');
+    const title = `ADESTRAMENTO · ${training.step + 1}/4`;
+    const instruction = trainingInstruction(training, getBindings()[0], preferences.mouse);
+    if ($('#training-title').textContent !== title) $('#training-title').textContent = title;
+    if ($('#training-copy').textContent !== instruction) $('#training-copy').textContent = instruction;
+  }
+  if (mode.startsWith('local') || mode === 'online') updateResult();
   view.render(game, dt);
-  audio.update(game, mode);
+  try { audio.update(game, mode); } catch (error) {
+    if (!audio.failed) console.warn('Audio desactivado tras un erro:', error);
+    audio.failed = true;
+  }
   if (mode.startsWith('local') || mode === 'online') updateHud();
   requestAnimationFrame(frame);
 }

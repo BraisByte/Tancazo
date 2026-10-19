@@ -32,7 +32,15 @@ export function loadProgress() {
 }
 
 export function saveProgress(progress) {
-  localStorage.setItem(KEY, JSON.stringify(progress));
+  try {
+    localStorage.setItem(KEY, JSON.stringify(progress));
+    progress.saveFailed = false;
+    return true;
+  } catch {
+    // Storage restrictions must never prevent the victory screen or the next mission.
+    progress.saveFailed = true;
+    return false;
+  }
 }
 
 export function completeMission(progress, missionId, game) {
