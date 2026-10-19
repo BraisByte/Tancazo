@@ -22,7 +22,7 @@ test('lobby configures and starts a four-seat online operation', { timeout: 15_0
     assert.equal(musicManifest.status, 200);
     assert.deepEqual(await musicManifest.json(), { tracks: {} });
 
-    const host = new WebSocket(`ws://127.0.0.1:${port}/online?create=1&name=Alpha&seats=2`);
+    const host = new WebSocket(`ws://127.0.0.1:${port}/online?create=1&name=Alpha&seats=2&chassis=bulwark&turret=tesla&engine=turbine&ultimate=aegis`);
     sockets.push(host);
     const welcome = await nextMessage(host, (message) => message.type === 'welcome');
     assert.match(welcome.room, /^[A-Z2-9]{5}$/);
@@ -53,6 +53,7 @@ test('lobby configures and starts a four-seat online operation', { timeout: 15_0
     assert.equal(snapshot.state.tanks.filter((tank) => tank.kind === 'player').length, 4);
     assert.equal(snapshot.state.map.id, 'foundry');
     assert.equal(snapshot.state.difficulty, 'hard');
+    assert.ok(snapshot.state.tanks.filter((tank) => tank.kind === 'player').every((tank) => tank.maxHp === 6 && tank.weapon === 'tesla' && tank.ultimate === 'aegis'));
 
     guest.close();
     await delay(100);

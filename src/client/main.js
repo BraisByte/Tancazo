@@ -1,10 +1,10 @@
-import { ITEMS, RANKS, STEP, advance, createGame } from '../shared/simulation.js?v=14';
-import { CAMPAIGN, UPGRADES } from '../shared/campaign.js';
-import { readLocalInputs, consume, getBindings, setBindings } from './input.js';
-import { GameRenderer } from './render.js';
-import { GameAudio } from './audio.js?v=13';
-import { buyUpgrade, completeMission, loadProgress } from './progression.js';
-import { EDITOR_TILES, defaultDraft, draftToMap, mapToDraft } from './editor.js';
+import { ITEMS, RANKS, STEP, advance, createGame } from '../shared/simulation.js?v=22';
+import { CAMPAIGN, GARAGE_PARTS, RUN_PERKS, UPGRADES } from '../shared/campaign.js?v=22';
+import { readLocalInputs, consume, getBindings, setBindings } from './input.js?v=22';
+import { GameRenderer } from './render.js?v=22';
+import { GameAudio } from './audio.js?v=22';
+import { buyUpgrade, completeMission, equipPart, fabricatePart, loadProgress } from './progression.js?v=22';
+import { EDITOR_TILES, defaultDraft, draftToMap, mapToDraft } from './editor.js?v=22';
 
 const $ = (selector) => document.querySelector(selector);
 const ui = {
@@ -16,10 +16,11 @@ const ui = {
   roster: $('#lobby-roster'), lobbyHint: $('#lobby-hint'), lobbyReady: $('#lobby-ready'), lobbyStart: $('#lobby-start'),
   lobbyMap: $('#lobby-map'), lobbyDifficulty: $('#lobby-difficulty'),
   campaign: $('#campaign-panel'), campaignMissions: $('#campaign-missions'), campaignProgress: $('#campaign-progress'), medals: $('#medals'), upgrades: $('#upgrade-list'),
+  garage: $('#garage-panel'), garageParts: $('#garage-parts'), garageSummary: $('#garage-summary'),
   editor: $('#editor-panel'), editorGrid: $('#editor-grid'), editorJson: $('#editor-json'), editorMessage: $('#editor-message'),
   settings: $('#settings-panel'), playerStatus: $('#player-status'), touch: $('#touch-controls'),
   battleStatus: $('#battle-status'), baseHealth: $('#base-health'), teamRank: $('#team-rank'), captureWrap: $('#capture-wrap'), captureProgress: $('#capture-progress'),
-  rankFill: $('#rank-fill'), minimap: $('#minimap'), notice: $('#game-notice'), musicShortcut: $('#music-shortcut'), musicScene: $('#music-scene'),
+  rankFill: $('#rank-fill'), minimap: $('#minimap'), notice: $('#game-notice'), musicShortcut: $('#music-shortcut'), musicScene: $('#music-scene'), combo: $('#combo'), ultimate: $('#ultimate'),
 };
 const view = new GameRenderer($('#game'));
 const audio = new GameAudio();
@@ -41,6 +42,7 @@ let shownResult = false;
 let campaignStars = 0;
 let campaignMissionId = null;
 let campaignAdvanceTimer = null;
+let runPerks = {};
 let lastNoticeKey = '';
 let noticeUntil = 0;
 let customMap = null;
@@ -50,16 +52,18 @@ let progress = loadProgress();
 let preferences;
 try {
   const saved = JSON.parse(localStorage.getItem('tancazo.settings') || '{}');
-  preferences = { music: saved.music ?? saved.volume ?? 70, effects: saved.effects ?? saved.volume ?? 70, ui: 100, shake: true, contrast: false, aim: false, bindings: getBindings(), ...saved };
-} catch { preferences = { music: 70, effects: 70, ui: 100, shake: true, contrast: false, aim: false, bindings: getBindings() }; }
+  preferences = { music: saved.music ?? saved.volume ?? 70, effects: saved.effects ?? saved.volume ?? 70, radio: true, ui: 100, shake: true, contrast: false, aim: false, bindings: getBindings(), ...saved };
+} catch { preferences = { music: 70, effects: 70, radio: true, ui: 100, shake: true, contrast: false, aim: false, bindings: getBindings() }; }
 
 function applyPreferences() {
   audio.setVolumes(preferences.music / 100, preferences.effects / 100);
+  audio.setRadioEnabled(preferences.radio);
   view.setShakeEnabled(preferences.shake);
   document.documentElement.style.fontSize = `${preferences.ui}%`;
   document.body.classList.toggle('high-contrast', preferences.contrast);
   $('#setting-music').value = preferences.music;
   $('#setting-effects').value = preferences.effects;
+  $('#setting-radio').checked = preferences.radio;
   $('#setting-ui').value = preferences.ui;
   $('#setting-shake').checked = preferences.shake;
   $('#setting-contrast').checked = preferences.contrast;
@@ -70,7 +74,7 @@ function applyPreferences() {
 }
 
 function renderBindings() {
-  const names = { up: 'Arriba', down: 'Abaixo', left: 'Esquerda', right: 'Dereita', fire: 'Disparo', switch: 'Arma', use: 'Obxecto' };
+  const names = { up: 'Arriba', down: 'Abaixo', left: 'Esquerda', right: 'Dereita', fire: 'Disparo', switch: 'Arma', use: 'Obxecto', ultimate: 'Definitiva' };
   const current = getBindings();
   $('#binding-list').replaceChildren(...Object.entries(names).map(([action, label]) => {
     const button = document.createElement('button');
@@ -97,7 +101,7 @@ $('#setting-effects').addEventListener('input', () => audio.setVolumes(Number($(
 $('#preview-music').addEventListener('click', () => audio.previewMusic());
 
 function hidePanels() {
-  for (const panel of [ui.menu, ui.lobby, ui.result, ui.campaign, ui.editor, ui.settings]) panel.classList.add('hidden');
+  for (const panel of [ui.menu, ui.lobby, ui.result, ui.campaign, ui.garage, ui.editor, ui.settings]) panel.classList.add('hidden');
 }
 
 function setPlaying(nextMode) {
@@ -127,6 +131,8 @@ function startLocal(players, options = {}) {
     difficulty: options.difficulty || $('#difficulty-select').value,
     missionId: options.missionId,
     upgrades: campaignMissionId ? progress.upgrades : {},
+    loadout: progress.loadout,
+    runPerks,
   });
   localPlayers = game.tanks.filter((tank) => tank.kind === 'player').map((tank) => tank.id);
   setPlaying(players > 1 ? 'local2' : 'local1');
@@ -138,6 +144,7 @@ function onlineUrl(create, room = '', reconnect = false, spectate = false) {
   query.set('seats', $('#online-seats').value);
   query.set('map', $('#map-select').value);
   query.set('difficulty', $('#difficulty-select').value);
+  for (const [category, id] of Object.entries(progress.loadout || {})) query.set(category, id);
   if (create) query.set('create', '1');
   else query.set('room', room.toUpperCase());
   if (reconnect) query.set('reconnect', '1');
@@ -258,7 +265,7 @@ function drawMinimap() {
   const context = ui.minimap.getContext('2d');
   const width = ui.minimap.width, height = ui.minimap.height;
   const tileWidth = width / game.map.width, tileHeight = height / game.map.height;
-  const colors = { '.': '#102936', B: '#a94f34', S: '#607d89', W: '#117a91', G: '#2c8d58', H: '#ffe07b' };
+  const colors = { '.': '#102936', B: '#a94f34', S: '#607d89', W: '#117a91', G: '#2c8d58', I: '#9edff2', M: '#5b4631', X: '#c94434', D: '#93633d', R: '#a87546', H: '#ffe07b' };
   context.fillStyle = '#07131e'; context.fillRect(0, 0, width, height);
   for (let row = 0; row < game.map.height; row++) for (let col = 0; col < game.map.width; col++) {
     context.fillStyle = colors[game.map.tiles[row][col]] || colors['.'];
@@ -268,19 +275,24 @@ function drawMinimap() {
     context.strokeStyle = '#47e6a4'; context.lineWidth = 2;
     context.beginPath(); context.arc(game.capture.x * tileWidth, game.capture.z * tileHeight, tileWidth * 1.15, 0, Math.PI * 2); context.stroke();
   }
+  if (game.rescue) {
+    context.strokeStyle = '#ffd166'; context.lineWidth = 2;
+    context.beginPath(); context.arc(game.rescue.extraction[0] * tileWidth, game.rescue.extraction[1] * tileHeight, tileWidth, 0, Math.PI * 2); context.stroke();
+  }
   for (const powerup of game.powerups || []) {
     context.fillStyle = '#f7e26b';
     context.fillRect(powerup.x * tileWidth - 2, powerup.z * tileHeight - 2, 4, 4);
   }
   for (const tank of game.tanks.filter((candidate) => candidate.alive)) {
-    context.fillStyle = tank.kind === 'player' ? '#47e6a4' : tank.kind === 'convoy' ? '#ffd166' : tank.kind === 'boss' ? '#ff2f78' : tank.kind === 'generator' ? '#ff9f43' : '#ff536b';
+    context.fillStyle = tank.kind === 'player' ? '#47e6a4' : tank.kind === 'convoy' ? '#ffd166' : tank.kind === 'survivor' ? '#f8f2d7' : tank.kind === 'boss' ? '#ff2f78' : tank.kind === 'generator' ? '#ff9f43' : '#ff536b';
     const size = tank.kind === 'boss' ? 7 : 5;
     context.fillRect(tank.x * tileWidth - size / 2, tank.z * tileHeight - size / 2, size, size);
   }
 }
 
 function updateNotices() {
-  const effect = [...(game.effects || [])].reverse().find((candidate) => candidate.type === 'pickup' || candidate.type === 'rank' || ITEMS[candidate.type]);
+  const radioMessages = { ultimate: 'HABILIDADE DEFINITIVA ACTIVADA', critical: 'IMPACTO TRASEIRO · SISTEMAS DANADOS', rescue: 'SUPERVIVENTE LOCALIZADO · ESCOLTA Á EXTRACCIÓN', revive: 'UNIDADE REANIMADA', boss: 'ALERTA · NOVA FASE DO LEVIATÁN' };
+  const effect = [...(game.effects || [])].reverse().find((candidate) => candidate.type === 'pickup' || candidate.type === 'rank' || ITEMS[candidate.type] || radioMessages[candidate.type]);
   if (effect) {
     const key = `${effect.tick}:${effect.type}:${effect.powerup || ''}`;
     if (key !== lastNoticeKey) {
@@ -290,9 +302,11 @@ function updateNotices() {
         ui.notice.textContent = item ? `${item.name.toUpperCase()} RECOLLIDO · USA A ACCIÓN OBXECTO` : `${String(effect.powerup).toUpperCase()} CONSEGUIDO`;
       } else if (effect.type === 'rank') {
         ui.notice.textContent = `RANGO ${game.teamRank} · ${RANKS[(game.teamRank || 1) - 1]?.name.toUpperCase()}`;
-      } else ui.notice.textContent = `${ITEMS[effect.type].name.toUpperCase()} ACTIVADO`;
+      } else if (radioMessages[effect.type]) ui.notice.textContent = `RADIO · ${radioMessages[effect.type]}`;
+      else ui.notice.textContent = `${ITEMS[effect.type].name.toUpperCase()} ACTIVADO`;
       noticeUntil = performance.now() + 2200;
       ui.notice.classList.remove('hidden');
+      audio.radio(ui.notice.textContent);
     }
   }
   if (noticeUntil && performance.now() >= noticeUntil) ui.notice.classList.add('hidden');
@@ -310,13 +324,16 @@ function updateHud() {
   } else if (game.objective === 'generators') {
     ui.counterLabel.textContent = 'XERADORES';
     ui.enemies.textContent = String(game.tanks.filter((tank) => tank.kind === 'generator' && tank.alive).length);
+  } else if (game.objective === 'rescue') {
+    ui.counterLabel.textContent = 'RESCATADOS';
+    ui.enemies.textContent = `${game.rescue?.rescued || 0}/${game.rescue?.total || 0}`;
   } else {
     ui.counterLabel.textContent = 'INIMIGOS';
     ui.enemies.textContent = String((game.enemiesToSpawn || 0) + alive).padStart(2, '0');
   }
   ui.difficulty.textContent = ({ easy: 'PATRULLA', normal: 'ASEDIO', hard: 'TORMENTA' })[game.difficulty] || 'ASEDIO';
   ui.musicScene.textContent = game.bossSpawned ? 'LEVIATÁN' : ({ citadel: 'CIUDADELA', foundry: 'FORXA', delta: 'DELTA', glacier: 'GLACIAR', marsh: 'PANTANO', arsenal: 'ARSENAL', fortress: 'FORTALEZA' })[game.map.id] || 'CAMPO';
-  const objectiveText = game.objective === 'survive' ? 'RESISTE ATA A EVACUACIÓN' : game.objective === 'escort' ? 'ESCOLTA O TRANSPORTE' : game.objective === 'capture' ? 'MANTÉN A BALIZA' : game.objective === 'generators' ? 'DESTRÚE OS XERADORES' : game.bossSpawned ? 'DESTRÚE O LEVIATÁN' : 'DEFENDE O NÚCLEO';
+  const objectiveText = game.objective === 'survive' ? 'RESISTE ATA A EVACUACIÓN' : game.objective === 'escort' ? 'ESCOLTA O TRANSPORTE' : game.objective === 'capture' ? 'MANTÉN A BALIZA' : game.objective === 'generators' ? 'DESTRÚE OS XERADORES' : game.objective === 'rescue' ? 'RESCATA E EXTRAE A COLUMNA' : game.bossSpawned ? 'ROMPE OS PUNTOS DÉBILES DO LEVIATÁN' : 'DEFENDE O NÚCLEO';
   ui.status.textContent = game.status === 'playing' ? objectiveText : game.status === 'victory' ? 'SECTOR ASEGURADO' : 'NÚCLEO DESTRUÍDO';
   ui.baseHealth.textContent = `${'◆'.repeat(Math.max(0, game.baseHp || 0))}${'◇'.repeat(Math.max(0, (game.baseMaxHp || 3) - (game.baseHp || 0)))}${game.baseShieldTimer > 0 ? ' · ESCUDO' : ''}`;
   const rank = RANKS[(game.teamRank || 1) - 1] || RANKS[0];
@@ -324,18 +341,23 @@ function updateHud() {
   ui.teamRank.textContent = `${['I', 'II', 'III', 'IV', 'V'][rank.rank - 1]} · ${game.teamKills || 0}${nextRank ? `/${nextRank.kills}` : ' · MÁX'}`;
   const rankProgress = nextRank ? ((game.teamKills || 0) - rank.kills) / (nextRank.kills - rank.kills) : 1;
   ui.rankFill.style.width = `${Math.max(0, Math.min(1, rankProgress)) * 100}%`;
+  const primaryPlayer = game.tanks.find((tank) => tank.kind === 'player');
+  ui.combo.textContent = `×${game.combo || 0}`;
+  ui.ultimate.textContent = `${Math.round(primaryPlayer?.ultimateCharge || 0)}% · F`;
   drawMinimap();
   updateNotices();
   ui.captureWrap.classList.toggle('hidden', !game.capture);
   if (game.capture) ui.captureProgress.textContent = `${Math.round(game.capture.progress / game.capture.goal * 100)}%`;
-  ui.playerStatus.replaceChildren(...game.tanks.filter((tank) => tank.kind === 'player' || tank.kind === 'convoy').map((tank) => {
+  ui.playerStatus.replaceChildren(...game.tanks.filter((tank) => tank.kind === 'player' || tank.kind === 'convoy' || tank.kind === 'survivor').map((tank) => {
     const chip = document.createElement('div'); chip.className = 'player-chip';
     const name = document.createElement('b'); name.textContent = tank.name;
     const status = document.createElement('span');
     const health = document.createElement('i'); health.className = 'health-pips';
     health.textContent = `${'◆'.repeat(Math.max(0, tank.hp))}${'◇'.repeat(Math.max(0, tank.maxHp - tank.hp))}`;
     const item = tank.item ? ` · Obxecto: ${ITEMS[tank.item]?.name || tank.item}` : '';
-    status.append(health, document.createTextNode(` · ${tank.weapon || 'cannon'}${tank.shield ? ` · escudo ${tank.shield}` : ''}${tank.kind === 'player' ? ` · R${tank.rank || 1}${item}` : ''}`));
+    const damage = tank.trackDamage > 0 ? ' · ORUGAS DANADAS' : tank.turretDamage > 0 ? ' · TORRETA DANADA' : tank.burningTimer > 0 ? ' · INCENDIO' : '';
+    const downed = tank.downed ? ` · CAÍDO ${Math.ceil(tank.respawn || 0)}s` : '';
+    status.append(health, document.createTextNode(` · ${tank.weapon || 'cannon'}${tank.shield ? ` · escudo ${tank.shield}` : ''}${tank.kind === 'player' ? ` · R${tank.rank || 1}${item}${damage}${downed}` : tank.kind === 'survivor' ? (tank.activated ? ' · EN MARCHA' : ' · POR LOCALIZAR') : ''}`));
     chip.append(name, status); return chip;
   }));
   if (game.status !== 'playing' && !shownResult) {
@@ -344,25 +366,28 @@ function updateHud() {
     setTimeout(() => {
       ui.resultTitle.textContent = game.status === 'victory' ? 'VICTORIA' : 'DERROTA';
       const missionIndex = CAMPAIGN.findIndex((mission) => mission.id === campaignMissionId);
-      const unlockCopy = campaignMissionId && game.status === 'victory' && missionIndex < CAMPAIGN.length - 1 ? ` · Misión ${missionIndex + 2} desbloqueada` : '';
+      const mission = CAMPAIGN[missionIndex];
+      const unlockCopy = campaignMissionId && game.status === 'victory' && mission?.reward ? ` · Recompensa: ${mission.reward.name}` : '';
       ui.resultCopy.textContent = `Puntuación: ${String(game.score || 0).padStart(6, '0')}${campaignMissionId && game.status === 'victory' ? ` · ${'★'.repeat(campaignStars)}${'☆'.repeat(3 - campaignStars)}` : ''}${unlockCopy}`;
       const me = currentLobby?.clients.find((client) => client.clientId === clientId);
       $('#restart').disabled = mode === 'online' && !me?.host;
-      $('#restart').textContent = mode === 'online' && !me?.host ? 'Agardando o anfitrión' : campaignMissionId && game.status === 'victory' && missionIndex < CAMPAIGN.length - 1 ? 'Seguinte misión' : 'Xogar de novo';
+      $('#restart').textContent = mode === 'online' && !me?.host ? 'Agardando o anfitrión' : campaignMissionId && game.status === 'victory' && mission?.next?.length ? (mission.next.length > 1 ? 'Continuar pola ruta principal' : 'Seguinte misión') : 'Xogar de novo';
       $('#result-campaign').classList.toggle('hidden', !campaignMissionId);
       $('#back').textContent = campaignMissionId ? 'Seleccionar misión' : 'Volver ao menú';
       ui.result.classList.remove('hidden');
-      if (campaignMissionId && game.status === 'victory' && missionIndex < CAMPAIGN.length - 1) {
-        ui.resultCopy.textContent += ' · Avance automático en 4 segundos';
+      if (campaignMissionId && game.status === 'victory' && mission?.next?.length) {
+        renderPerkChoices();
+        ui.resultCopy.textContent += ' · Avance automático en 8 segundos';
         clearTimeout(campaignAdvanceTimer);
-        campaignAdvanceTimer = setTimeout(startNextCampaignMission, 4000);
-      }
+        campaignAdvanceTimer = setTimeout(() => { grantRunPerk(Object.keys(RUN_PERKS)[0]); startNextCampaignMission(); }, 8000);
+      } else $('#perk-choices').classList.add('hidden');
     }, 500);
   }
 }
 
 function returnToMenu() {
   clearTimeout(campaignAdvanceTimer); campaignAdvanceTimer = null;
+  runPerks = {};
   clearTimeout(reconnectTimer); reconnectTimer = null;
   socket?.close(); socket = null; onlinePlayers = []; clientId = null; currentLobby = null; isSpectator = false;
   currentRoomCode = '';
@@ -387,28 +412,49 @@ function openCampaignSelector() {
 
 function startNextCampaignMission() {
   if (!campaignMissionId || game.status !== 'victory') return false;
-  const index = CAMPAIGN.findIndex((mission) => mission.id === campaignMissionId);
-  if (index < 0 || index >= CAMPAIGN.length - 1) return false;
+  const mission = CAMPAIGN.find((candidate) => candidate.id === campaignMissionId);
+  const nextId = mission?.next?.[0];
+  if (!nextId) return false;
   ui.result.classList.add('hidden');
-  startLocal(1, { missionId: CAMPAIGN[index + 1].id });
+  startLocal(1, { missionId: nextId });
   return true;
+}
+
+function grantRunPerk(id) {
+  if (RUN_PERKS[id]) runPerks[id] = Math.min(3, (runPerks[id] || 0) + 1);
+}
+
+function renderPerkChoices() {
+  const container = $('#perk-choices');
+  const choices = Object.entries(RUN_PERKS).sort(([first], [second]) => (((game.seed >>> 0) + first.length * 13) % 17) - (((game.seed >>> 0) + second.length * 13) % 17)).slice(0, 3);
+  container.replaceChildren(...choices.map(([id, perk]) => {
+    const button = document.createElement('button');
+    button.textContent = `${perk.name} · ${perk.description}`;
+    button.addEventListener('click', () => { clearTimeout(campaignAdvanceTimer); grantRunPerk(id); startNextCampaignMission(); });
+    return button;
+  }));
+  container.classList.remove('hidden');
 }
 
 function renderCampaign() {
   progress = loadProgress();
   ui.medals.textContent = progress.medals;
-  ui.campaignProgress.textContent = `${Math.min(progress.unlocked, CAMPAIGN.length)}/${CAMPAIGN.length}`;
-  ui.campaignMissions.replaceChildren(...CAMPAIGN.map((mission, index) => {
+  ui.campaignProgress.textContent = `${Object.keys(progress.stars).length}/${CAMPAIGN.length}`;
+  const displayOrder = ['green-line', 'red-forge', 'silent-depot', 'frozen-pass', 'iron-convoy', 'emerald-marsh', 'broken-arsenal', 'ghost-rescue', 'last-bastion', 'command-gate', 'cobalt-heart'];
+  const missions = [...CAMPAIGN].sort((first, second) => displayOrder.indexOf(first.id) - displayOrder.indexOf(second.id));
+  ui.campaignMissions.replaceChildren(...missions.map((mission, index) => {
     const card = document.createElement('article');
-    const locked = index >= progress.unlocked;
+    const locked = !progress.unlockedMissions.includes(mission.id);
     card.className = `mission-card${locked ? ' future' : ''}`;
+    const sector = document.createElement('span'); sector.className = 'sector'; sector.textContent = `${mission.sector || 'SECTOR'} · ${mission.objective.toUpperCase()}`;
     const title = document.createElement('h3'); title.textContent = `${index + 1}. ${mission.title}`;
     const briefing = document.createElement('p'); briefing.textContent = mission.briefing;
+    const reward = document.createElement('span'); reward.className = 'reward'; reward.textContent = mission.reward ? `RECOMPENSA · ${mission.reward.name}` : '';
     const stars = document.createElement('div'); stars.className = 'stars';
     const earned = progress.stars[mission.id] || 0; stars.textContent = `${'★'.repeat(earned)}${'☆'.repeat(3 - earned)}`;
     const play = document.createElement('button'); play.textContent = locked ? 'Probar misión' : 'Despregar';
-    play.addEventListener('click', () => startLocal(1, { missionId: mission.id }));
-    card.append(title, briefing, stars, play); return card;
+    play.addEventListener('click', () => { runPerks = {}; startLocal(1, { missionId: mission.id }); });
+    card.append(sector, title, briefing, reward, stars, play); return card;
   }));
   ui.upgrades.replaceChildren(...Object.entries(UPGRADES).map(([id, definition]) => {
     const item = document.createElement('div'); item.className = 'upgrade';
@@ -420,6 +466,38 @@ function renderCampaign() {
     buy.addEventListener('click', () => { if (buyUpgrade(progress, id)) renderCampaign(); });
     item.append(title, description, buy); return item;
   }));
+}
+
+function renderGarage() {
+  progress = loadProgress();
+  const selected = progress.loadout;
+  const chassis = GARAGE_PARTS.chassis[selected.chassis], turret = GARAGE_PARTS.turret[selected.turret], engine = GARAGE_PARTS.engine[selected.engine], ultimate = GARAGE_PARTS.ultimate[selected.ultimate];
+  ui.garageSummary.textContent = `${chassis.name} · ${turret.name} · ${engine.name} · ${ultimate.name} — Vida ${Math.max(2, 3 + chassis.hp + (progress.upgrades.armor || 0))}, velocidade ×${(chassis.speed * engine.speed).toFixed(2)}, recarga ×${turret.reload.toFixed(2)}.`;
+  const categoryNames = { chassis: 'Chasis', turret: 'Torretas', engine: 'Motores', ultimate: 'Habilidades definitivas' };
+  ui.garageParts.replaceChildren(...Object.entries(categoryNames).map(([category, name]) => {
+    const section = document.createElement('section'); section.className = 'garage-category';
+    const heading = document.createElement('h3'); heading.textContent = name;
+    const grid = document.createElement('div'); grid.className = 'part-grid';
+    grid.replaceChildren(...Object.entries(GARAGE_PARTS[category]).map(([id, definition]) => {
+      const unlocked = progress.unlockedParts[category]?.includes(id);
+      const card = document.createElement('article'); card.className = `part-card${selected[category] === id ? ' selected' : ''}${unlocked ? '' : ' locked'}`;
+      const title = document.createElement('b'); title.textContent = definition.name;
+      const description = document.createElement('small'); description.textContent = definition.description;
+      const button = document.createElement('button'); button.disabled = selected[category] === id || (!unlocked && progress.medals < 4);
+      button.textContent = !unlocked ? 'Fabricar · 4 ★' : selected[category] === id ? 'EQUIPADO' : 'Equipar';
+      button.addEventListener('click', () => {
+        if (!unlocked && fabricatePart(progress, category, id, 4)) renderGarage();
+        else if (equipPart(progress, category, id)) renderGarage();
+      });
+      card.append(title, description, button); return card;
+    }));
+    section.append(heading, grid); return section;
+  }));
+}
+
+function openGarage() {
+  renderGarage();
+  openPanel(ui.garage, 'garage');
 }
 
 function renderEditor() {
@@ -451,15 +529,17 @@ $('#host').addEventListener('click', () => connect(true));
 $('#join').addEventListener('click', () => connect(false));
 $('#spectate').addEventListener('click', () => connect(false, false, true));
 $('#campaign').addEventListener('click', openCampaignSelector);
+$('#garage').addEventListener('click', openGarage);
 $('#editor').addEventListener('click', () => openPanel(ui.editor, 'editor'));
 $('#settings').addEventListener('click', () => openPanel(ui.settings, 'settings'));
 ui.musicShortcut.addEventListener('click', () => openPanel(ui.settings, 'settings'));
 $('#campaign-back').addEventListener('click', returnToMenu);
+$('#garage-back').addEventListener('click', returnToMenu);
 $('#editor-back').addEventListener('click', returnToMenu);
 $('#settings-back').addEventListener('click', () => {
   preferences = {
     music: Number($('#setting-music').value), effects: Number($('#setting-effects').value), ui: Number($('#setting-ui').value),
-    shake: $('#setting-shake').checked, contrast: $('#setting-contrast').checked, aim: $('#setting-aim').checked,
+    radio: $('#setting-radio').checked, shake: $('#setting-shake').checked, contrast: $('#setting-contrast').checked, aim: $('#setting-aim').checked,
     bindings: getBindings(),
   };
   localStorage.setItem('tancazo.settings', JSON.stringify(preferences));
@@ -510,6 +590,7 @@ if (autostart === 'solo') startLocal(1);
 if (autostart === 'local') startLocal(2);
 if (autostart === 'host') connect(true);
 if (autostart === 'campaign') openCampaignSelector();
+if (autostart === 'garage') openGarage();
 if (autostart === 'editor') openPanel(ui.editor, 'editor');
 if (autostart === 'settings') openPanel(ui.settings, 'settings');
 if (autostart === 'boss') startLocal(1, { missionId: 'cobalt-heart' });

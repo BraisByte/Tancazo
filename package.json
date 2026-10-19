@@ -1,13 +1,13 @@
 {
   "name": "tancazo",
-  "version": "0.4.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "Arcade de tanques en color con multijugador local y online.",
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "check": "node --check server/index.js && node --check src/shared/simulation.js && node --check src/client/main.js && node --check src/client/audio.js",
+    "check": "node --check server/index.js && node --check src/shared/campaign.js && node --check src/shared/maps.js && node --check src/shared/simulation.js && node --check src/client/audio.js && node --check src/client/editor.js && node --check src/client/input.js && node --check src/client/main.js && node --check src/client/progression.js && node --check src/client/render.js",
     "test": "node --test test/*.test.js",
     "docker:up": "docker compose up --build"
   },

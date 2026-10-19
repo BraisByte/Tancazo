@@ -9,6 +9,9 @@ const palette = {
   water: 0x138da5,
   grass: 0x37a866,
   base: 0xffdc73,
+  ice: 0x9edff2,
+  mud: 0x5b4631,
+  bridge: 0xa87546,
 };
 
 function material(color, roughness = .72, metalness = .05) {
@@ -58,6 +61,14 @@ export class GameRenderer {
       repair: new THREE.MeshBasicMaterial({ color: 0x61e786 }),
       fortress: new THREE.MeshBasicMaterial({ color: 0x73e8ff }),
       shield: new THREE.MeshBasicMaterial({ color: 0x73e8ff }),
+      critical: new THREE.MeshBasicMaterial({ color: 0xff341f }),
+      tesla: new THREE.MeshBasicMaterial({ color: 0xc69cff }),
+      ultimate: new THREE.MeshBasicMaterial({ color: 0xffdc73 }),
+      artillery: new THREE.MeshBasicMaterial({ color: 0xff4d35 }),
+      rescue: new THREE.MeshBasicMaterial({ color: 0xf8f2d7 }),
+      revive: new THREE.MeshBasicMaterial({ color: 0x47e6a4 }),
+      door: new THREE.MeshBasicMaterial({ color: 0xc68b59 }),
+      collapse: new THREE.MeshBasicMaterial({ color: 0x8fe7ff }),
     };
     this.mapSignature = '';
     this.predictedInputs = {};
@@ -139,6 +150,23 @@ export class GameRenderer {
       } else if (tile === 'G') {
         mesh = new THREE.Mesh(new THREE.BoxGeometry(.9, .13, .9), material(palette.grass));
         mesh.position.y = .08;
+      } else if (tile === 'I') {
+        mesh = new THREE.Mesh(new THREE.BoxGeometry(.96, .06, .96), new THREE.MeshPhysicalMaterial({ color: palette.ice, roughness: .08, metalness: .05, transparent: true, opacity: .72 }));
+        mesh.position.y = .02;
+      } else if (tile === 'M') {
+        mesh = new THREE.Mesh(new THREE.BoxGeometry(.96, .08, .96), material(palette.mud, .95));
+        mesh.position.y = .02;
+      } else if (tile === 'R') {
+        mesh = new THREE.Group();
+        for (let plank = -2; plank <= 2; plank++) {
+          const board = new THREE.Mesh(new THREE.BoxGeometry(.92, .1, .15), material(palette.bridge, .8));
+          board.position.set(0, .05, plank * .18); mesh.add(board);
+        }
+      } else if (tile === 'X') {
+        mesh = new THREE.Mesh(new THREE.CylinderGeometry(.28, .3, .62, 12), material(0xc94434, .35, .5));
+        mesh.userData.barrel = true;
+      } else if (tile === 'D') {
+        mesh = new THREE.Mesh(new THREE.BoxGeometry(.94, .72, .3), material(0x93633d, .55, .25));
       } else if (tile === 'H') {
         mesh = new THREE.Group();
         const pad = new THREE.Mesh(new THREE.CylinderGeometry(.42, .48, .25, 8), material(palette.base, .4, .4));
@@ -150,7 +178,7 @@ export class GameRenderer {
       if (!mesh) continue;
       mesh.position.x = col + .5;
       mesh.position.z = row + .5;
-      if (!mesh.position.y) mesh.position.y = tile === 'W' ? -.01 : .36;
+      if (!mesh.position.y) mesh.position.y = tile === 'W' ? -.01 : ['I', 'M', 'R'].includes(tile) ? 0 : .36;
       mesh.traverse((object) => { if (object.isMesh) { object.castShadow = tile !== 'W'; object.receiveShadow = true; } });
       this.tileGroup.add(mesh);
     }
@@ -203,6 +231,12 @@ export class GameRenderer {
   }
 
   makeTank(tank) {
+    if (tank.kind === 'weakpoint') {
+      const weakpoint = new THREE.Mesh(new THREE.OctahedronGeometry(.25), new THREE.MeshStandardMaterial({ color: 0xffcf56, emissive: 0xff5d31, emissiveIntensity: .85, roughness: .2 }));
+      weakpoint.add(new THREE.PointLight(0xff5d31, 1.8, 2.2));
+      weakpoint.userData.tracks = [];
+      return weakpoint;
+    }
     if (tank.kind === 'generator') {
       const group = new THREE.Group();
       const base = new THREE.Mesh(new THREE.CylinderGeometry(.42, .5, .35, 10), material(0x68243b, .35, .65));
@@ -237,11 +271,22 @@ export class GameRenderer {
     shield.userData.shield = true;
     shield.visible = false;
     group.add(body, leftTrack, rightTrack, turret, barrel, shield);
+    if (tank.turret === 'repeater') {
+      barrel.position.x = -.09;
+      const secondBarrel = barrel.clone(); secondBarrel.position.x = .09; group.add(secondBarrel);
+    } else if (tank.turret === 'siege') {
+      barrel.scale.set(1.35, 1.35, 1.35);
+      turret.scale.set(1.18, 1, 1.18);
+    } else if (tank.turret === 'tesla') {
+      const coil = new THREE.Mesh(new THREE.TorusGeometry(.2, .035, 7, 16), new THREE.MeshBasicMaterial({ color: 0xc69cff }));
+      coil.position.y = .58; coil.rotation.x = Math.PI / 2; group.add(coil);
+    }
     group.userData.barrel = barrel;
     group.userData.bodyMaterial = bodyMat;
     group.userData.tracks = [leftTrack, rightTrack];
     group.traverse((object) => { if (object.isMesh) { object.castShadow = true; object.receiveShadow = true; } });
     group.userData.kind = tank.kind;
+    group.userData.baseScale = tank.chassisScale || 1;
     if (tank.kind === 'boss') group.scale.setScalar(1.55);
     else if (tank.kind === 'convoy') group.scale.set(1.15, 1.08, 1.45);
     else if (tank.role === 'heavy') group.scale.setScalar(1.12);
@@ -303,10 +348,10 @@ export class GameRenderer {
       if (mesh.userData.barrel) mesh.userData.barrel.position.z = -.34 + (tank.recoil || 0) * .1;
       const movement = Math.hypot(tank.vx || 0, tank.vz || 0);
       for (const track of mesh.userData.tracks || []) track.position.y = .2 + Math.sin(this.clock * 18 * movement) * .012;
-      if (tank.kind === 'player') mesh.scale.setScalar(1 + ((tank.rank || 1) - 1) * .035);
+      if (tank.kind === 'player') mesh.scale.setScalar((mesh.userData.baseScale || 1) * (1 + ((tank.rank || 1) - 1) * .035));
       if (mesh.userData.bodyMaterial) {
-        mesh.userData.bodyMaterial.emissive.setHex(tank.frozenTimer > 0 ? 0x258eb5 : tank.empTimer > 0 ? 0x6e32a8 : 0x000000);
-        mesh.userData.bodyMaterial.emissiveIntensity = tank.frozenTimer > 0 || tank.empTimer > 0 ? .7 : 0;
+        mesh.userData.bodyMaterial.emissive.setHex(tank.burningTimer > 0 ? 0xb52d18 : tank.overdriveTimer > 0 ? 0xf3b61f : tank.frozenTimer > 0 ? 0x258eb5 : tank.empTimer > 0 ? 0x6e32a8 : 0x000000);
+        mesh.userData.bodyMaterial.emissiveIntensity = tank.burningTimer > 0 || tank.overdriveTimer > 0 || tank.frozenTimer > 0 || tank.empTimer > 0 ? .7 : 0;
       }
     }
     for (const bullet of state.bullets) {
@@ -334,6 +379,16 @@ export class GameRenderer {
       if (!mesh) { mesh = this.makeDeployable('decoy'); this.meshes.set(decoy.id, mesh); this.entityGroup.add(mesh); }
       mesh.position.set(decoy.x, .05, decoy.z); mesh.rotation.y += dt * 2.8;
     }
+    for (const hazard of state.hazards || []) {
+      aliveIds.add(hazard.id);
+      let mesh = this.meshes.get(hazard.id);
+      if (!mesh) {
+        mesh = new THREE.Mesh(new THREE.RingGeometry(hazard.radius * .72, hazard.radius, 36), new THREE.MeshBasicMaterial({ color: 0xff315c, side: THREE.DoubleSide, transparent: true, opacity: .72 }));
+        mesh.rotation.x = -Math.PI / 2; this.meshes.set(hazard.id, mesh); this.entityGroup.add(mesh);
+      }
+      mesh.position.set(hazard.x, .035, hazard.z);
+      mesh.material.opacity = .28 + Math.abs(Math.sin(this.clock * 9)) * .5;
+    }
     if (state.capture) {
       const id = 'capture-marker'; aliveIds.add(id);
       let mesh = this.meshes.get(id);
@@ -343,6 +398,16 @@ export class GameRenderer {
       }
       mesh.position.set(state.capture.x, .025, state.capture.z);
       mesh.material.opacity = .35 + state.capture.progress / state.capture.goal * .55;
+    }
+    if (state.rescue) {
+      const id = 'rescue-marker'; aliveIds.add(id);
+      let mesh = this.meshes.get(id);
+      if (!mesh) {
+        mesh = new THREE.Mesh(new THREE.RingGeometry(.65, .9, 32), new THREE.MeshBasicMaterial({ color: 0xffd166, side: THREE.DoubleSide, transparent: true, opacity: .72 }));
+        mesh.rotation.x = -Math.PI / 2; this.meshes.set(id, mesh); this.entityGroup.add(mesh);
+      }
+      mesh.position.set(state.rescue.extraction[0], .03, state.rescue.extraction[1]);
+      mesh.rotation.z += dt * .7;
     }
     for (const [id, mesh] of this.meshes) if (!aliveIds.has(id)) {
       mesh.removeFromParent();

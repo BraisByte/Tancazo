@@ -75,7 +75,7 @@ button.accent { color: #062318; border-color: transparent; background: linear-gr
 .message { min-height: 20px; margin: 13px 0 0; color: #ffbd76; font-size: 13px; }
 .controls { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 16px; color: #7897a5; font-size: 11px; }
 .controls b { color: var(--cyan); }
-.secondary-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 9px; }
+.secondary-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-top: 9px; }
 .secondary-actions button { min-height: 36px; padding: 7px; color: #9fc3d1; font-size: 11px; }
 .music-shortcut { width: 100%; min-height: 34px; margin-top: 8px; padding: 6px 10px; color: var(--cyan); border-color: rgba(76,201,240,.35); font-size: 11px; }
 .setup-row { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 10px; }
@@ -100,6 +100,8 @@ button.accent { color: #062318; border-color: transparent; background: linear-gr
 .mission-card.future { opacity: .68; }
 .mission-card.future button { color: var(--cyan); border-color: rgba(76,201,240,.35); }
 .mission-card h3 { margin: 0; color: var(--cream); }
+.mission-card .sector { color: var(--cyan); font: 800 9px "Arial Narrow", sans-serif; letter-spacing: .14em; }
+.mission-card .reward { color: var(--mint); font-size: 10px; }
 .mission-card p { color: #91aebb; font-size: 12px; line-height: 1.45; }
 .stars { color: var(--orange); letter-spacing: .16em; }
 .currency { color: #91aebb; }
@@ -108,6 +110,15 @@ button.accent { color: #062318; border-color: transparent; background: linear-gr
 .upgrade { padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(3,13,22,.4); }
 .upgrade small { display: block; min-height: 32px; color: #7f9eaa; }
 .upgrade button { width: 100%; min-height: 34px; margin-top: 8px; }
+.garage-summary { padding: 13px; border: 1px solid var(--line); border-radius: 12px; color: #a9c8d3; background: rgba(3,13,22,.45); }
+.garage-parts { display: grid; gap: 18px; }
+.garage-category h3 { margin: 0 0 8px; color: var(--mint); text-transform: uppercase; letter-spacing: .12em; }
+.part-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 8px; }
+.part-card { display: grid; align-content: space-between; min-height: 130px; padding: 13px; border: 1px solid var(--line); border-radius: 11px; background: rgba(3,13,22,.46); }
+.part-card.selected { border-color: var(--mint); box-shadow: inset 0 0 0 1px rgba(71,230,164,.35); }
+.part-card.locked { opacity: .48; }
+.part-card small { display: block; margin: 7px 0; color: #87a8b5; line-height: 1.4; }
+.part-card button { min-height: 34px; }
 
 .editor-panel { width: min(96vw, 920px); max-height: 92vh; overflow-y: auto; }
 .editor-layout { display: grid; grid-template-columns: minmax(420px, 1fr) 280px; gap: 18px; }
@@ -118,6 +129,11 @@ button.accent { color: #062318; border-color: transparent; background: linear-gr
 .editor-cell[data-tile="W"] { background: #138da5; }
 .editor-cell[data-tile="G"] { background: #37a866; }
 .editor-cell[data-tile="H"] { background: #ffdc73; }
+.editor-cell[data-tile="I"] { background: #9edff2; }
+.editor-cell[data-tile="M"] { background: #5b4631; }
+.editor-cell[data-tile="X"] { background: #c94434; }
+.editor-cell[data-tile="D"] { background: #93633d; }
+.editor-cell[data-tile="R"] { background: #a87546; }
 .editor-cell[data-tile="P"] { background: #47e6a4; }
 .editor-cell[data-tile="E"] { background: #ff4d6d; }
 .editor-tools { display: grid; align-content: start; gap: 8px; }
@@ -184,6 +200,9 @@ body.reduced-shake canvas { transform: none !important; }
 .result { width: min(90vw, 420px); text-align: center; }
 .result h2 { margin: 0; color: var(--mint); font: 900 48px "Arial Narrow", sans-serif; }
 .result button { width: 100%; margin-top: 9px; }
+.perk-choices { display: grid; gap: 7px; margin: 14px 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(3,13,22,.5); }
+.perk-choices::before { content: "SUBMINISTRO TÁCTICO · ELIXE UN"; color: var(--orange); font: 800 10px "Arial Narrow", sans-serif; letter-spacing: .14em; }
+.perk-choices button { margin: 0; min-height: 38px; color: var(--mint); font-size: 11px; }
 .connection { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); padding: 9px 14px; border-radius: 20px; background: #08131fda; color: var(--cyan); z-index: 6; }
 .hidden { display: none !important; }
 
@@ -193,6 +212,7 @@ body.reduced-shake canvas { transform: none !important; }
   .hud .mission { grid-row: 2; grid-column: 1 / -1; order: 4; min-width: 0; }
   .room { display: none !important; }
   .mission-grid, .upgrade-list { grid-template-columns: 1fr; }
+  .secondary-actions { grid-template-columns: 1fr 1fr; }
   .editor-layout { grid-template-columns: 1fr; }
   .editor-grid { min-width: 0; }
   .player-status { bottom: 90px; max-width: calc(100vw - 20px); overflow: hidden; }

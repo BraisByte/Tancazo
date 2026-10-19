@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocket, WebSocketServer } from 'ws';
 import { DIFFICULTIES, STEP, addPlayer, advance, createGame, publicState, removePlayer } from '../src/shared/simulation.js';
 import { MAPS } from '../src/shared/maps.js';
+import { GARAGE_PARTS } from '../src/shared/campaign.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PORT = Number(process.env.PORT || 8490);
@@ -101,7 +102,7 @@ function broadcastLobby(room) {
 
 function beginRoom(room) {
   room.phase = 'playing';
-  room.state = createGame({ players: 0, mapId: room.settings.mapId, difficulty: room.settings.difficulty });
+  room.state = createGame({ players: 0, mapId: room.settings.mapId, difficulty: room.settings.difficulty, loadout: room.settings.loadout });
   room.inputs = {};
   for (const client of room.clients.values()) for (let index = 0; index < client.playerIds.length; index++) {
     const playerId = client.playerIds[index];
@@ -130,6 +131,10 @@ server.on('upgrade', (req, socket, head) => {
       const settings = {
         mapId: MAPS[requestedMap] ? requestedMap : 'citadel',
         difficulty: DIFFICULTIES[requestedDifficulty] ? requestedDifficulty : 'normal',
+        loadout: Object.fromEntries(['chassis', 'turret', 'engine', 'ultimate'].map((category) => {
+          const requested = url.searchParams.get(category);
+          return [category, GARAGE_PARTS[category][requested] ? requested : Object.keys(GARAGE_PARTS[category])[0]];
+        })),
       };
       room = { code: roomCode, state: createGame({ players: 0, ...settings }), clients: new Map(), inputs: {}, idle: 0, phase: 'lobby', settings, hostId: null, startsAt: 0 };
       rooms.set(roomCode, room);
@@ -180,6 +185,7 @@ server.on('upgrade', (req, socket, head) => {
               fire: !!input.fire,
               switch: !!input.switch,
               use: !!input.use,
+              ultimate: !!input.ultimate,
             };
           }
         }

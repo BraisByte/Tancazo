@@ -1,6 +1,6 @@
 const SIZE = 15;
 export const EDITOR_TILES = Object.freeze({
-  '.': 'Baleiro', B: 'Ladrillo', S: 'Aceiro', W: 'Auga', G: 'Herba', H: 'Núcleo', P: 'Xogador', E: 'Inimigo',
+  '.': 'Baleiro', B: 'Ladrillo', S: 'Aceiro', W: 'Auga', G: 'Herba', I: 'Xeo', M: 'Barro', X: 'Barril', D: 'Porta', R: 'Ponte', H: 'Núcleo', P: 'Xogador', E: 'Inimigo',
 });
 
 export function defaultDraft() {

@@ -2,8 +2,8 @@ const held = new Set();
 const pressed = new Set();
 const touch = new Set();
 let bindings = [
-  { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', fire: 'Space', switch: 'KeyQ', use: 'KeyE', touch: true },
-  { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', fire: 'Enter', switch: 'ShiftRight', use: 'Slash' },
+  { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', fire: 'Space', switch: 'KeyQ', use: 'KeyE', ultimate: 'KeyF', touch: true },
+  { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', fire: 'Enter', switch: 'ShiftRight', use: 'Slash', ultimate: 'Numpad0' },
 ];
 
 export function setBindings(next) {
@@ -28,6 +28,7 @@ function keyboard(codes) {
     fire: held.has(codes.fire) || codes.touch && touch.has('fire'),
     switch: held.has(codes.switch) || codes.touch && touch.has('switch'),
     use: held.has(codes.use) || codes.touch && touch.has('use'),
+    ultimate: held.has(codes.ultimate) || codes.touch && touch.has('ultimate'),
     aimX: 0, aimZ: 0,
   };
 }
@@ -42,6 +43,7 @@ function gamepad(index) {
     fire: !!(pad.buttons[0]?.pressed || pad.buttons[7]?.pressed),
     switch: !!pad.buttons[3]?.pressed,
     use: !!pad.buttons[1]?.pressed,
+    ultimate: !!pad.buttons[4]?.pressed,
   };
   return Object.values(input).some(Boolean) ? input : null;
 }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { completeMission, loadProgress } from '../src/client/progression.js';
+import { completeMission, equipPart, loadProgress } from '../src/client/progression.js';
 
 test('winning the second campaign mission unlocks the third', () => {
   let saved = '';
@@ -26,5 +26,23 @@ test('saved stars repair a stale unlocked mission counter', () => {
     setItem: () => {},
   };
   assert.equal(loadProgress().unlocked, 3);
+  delete globalThis.localStorage;
+});
+
+test('mission rewards unlock garage parts that can be equipped', () => {
+  let saved = '';
+  globalThis.localStorage = {
+    getItem: () => saved,
+    setItem: (_key, value) => { saved = value; },
+  };
+  const progress = loadProgress();
+  completeMission(progress, 'red-forge', {
+    status: 'victory', score: 0,
+    tanks: [{ kind: 'player', alive: true, hp: 1, maxHp: 3 }],
+  });
+  assert.ok(progress.unlockedParts.turret.includes('repeater'));
+  assert.equal(equipPart(progress, 'turret', 'repeater'), true);
+  assert.equal(progress.loadout.turret, 'repeater');
+  assert.equal(equipPart(progress, 'turret', 'tesla'), false);
   delete globalThis.localStorage;
 });

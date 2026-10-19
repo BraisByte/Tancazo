@@ -8,6 +8,7 @@ export class GameAudio {
     this.knownEffects = new Set();
     this.musicVolume = .7;
     this.effectsVolume = .7;
+    this.radioEnabled = true;
     this.nextBeat = 0;
     this.beat = 0;
     this.trackManifest = {};
@@ -51,6 +52,19 @@ export class GameAudio {
     this.effectsVolume = Math.max(0, Math.min(1, Number(effects)));
     if (this.musicBus) this.musicBus.gain.value = Math.min(1.4, this.musicVolume * 1.35);
     if (this.effectsBus) this.effectsBus.gain.value = this.effectsVolume;
+  }
+
+  setRadioEnabled(enabled) { this.radioEnabled = !!enabled; }
+
+  radio(message) {
+    if (!this.radioEnabled || !('speechSynthesis' in globalThis) || !message) return;
+    speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(String(message).replace(/^RADIO · /, ''));
+    utterance.lang = 'es-ES';
+    utterance.rate = 1.08;
+    utterance.pitch = .72;
+    utterance.volume = Math.min(1, this.effectsVolume * .8);
+    speechSynthesis.speak(utterance);
   }
 
   async previewMusic() {
@@ -147,6 +161,10 @@ export class GameAudio {
       if (this.knownEffects.has(key)) continue;
       this.knownEffects.add(key);
       if (effect.type === 'boom' || effect.type === 'base') { this.noise(.32, .4); this.tone(95, .3, 'sawtooth', .22, .4); }
+      else if (effect.type === 'artillery' || effect.type === 'ultimate') { this.noise(.48, .5); this.tone(72, .55, 'sawtooth', .3, .35); }
+      else if (effect.type === 'tesla') { this.tone(840, .16, 'sawtooth', .14, .45); this.tone(1260, .1, 'square', .08, .6); }
+      else if (effect.type === 'critical') { this.tone(115, .3, 'square', .2, .5); }
+      else if (effect.type === 'revive' || effect.type === 'rescue') { this.tone(523.25, .35, 'triangle', .12, 1.5); this.tone(659.25, .45, 'triangle', .1, 1.25); }
       else if (effect.type === 'brick') this.noise(.1, .12);
       else this.tone(520, .055, 'triangle', .08, .7);
     }
