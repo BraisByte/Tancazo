@@ -33,6 +33,10 @@
           <option value="citadel">Ciudadela Esmeralda</option>
           <option value="foundry">Forxa Rubí</option>
           <option value="delta">Delta Cobalto</option>
+          <option value="glacier">Paso Xeado</option>
+          <option value="marsh">Néboa Esmeralda</option>
+          <option value="arsenal">Arsenal Carmesí</option>
+          <option value="fortress">Fortaleza Obsidiana</option>
         </select>
       </label>
       <label>Dificultade
@@ -51,10 +55,11 @@
     </div>
 
     <div class="secondary-actions">
-      <button id="campaign">Campaña</button>
+      <button id="campaign" class="accent">Seleccionar misión</button>
       <button id="editor">Editor</button>
-      <button id="settings">Accesibilidade</button>
+      <button id="settings">Son e accesibilidade</button>
     </div>
+    <button id="music-shortcut" class="music-shortcut">♪ Música adaptativa · 55%</button>
 
     <div class="join-row">
       <input id="room-code" maxlength="5" placeholder="CÓDIGO" aria-label="Código de sala">
@@ -64,15 +69,16 @@
 
     <p id="menu-message" class="message" role="status"></p>
     <div class="controls">
-      <span><b>X1</b> WASD · Espazo</span>
-      <span><b>X2</b> Frechas · Intro</span>
-      <span><b>MANDO</b> Stick · A</span>
+      <span><b>X1</b> WASD · Espazo · E</span>
+      <span><b>X2</b> Frechas · Intro · /</span>
+      <span><b>MANDO</b> Stick · A · B</span>
     </div>
   </section>
 
   <section id="campaign-panel" class="panel wide hidden">
     <p class="eyebrow">OPERACIÓN TANCAZO</p>
     <h2>Campaña por sectores</h2>
+    <p class="currency">Progreso recomendado: <strong id="campaign-progress">1/10</strong> · Podes probar calquera misión.</p>
     <div id="campaign-missions" class="mission-grid"></div>
     <h3>Melloras permanentes</h3>
     <p class="currency">Medallas dispoñibles: <strong id="medals">0</strong></p>
@@ -101,7 +107,11 @@
   <section id="settings-panel" class="panel settings-panel hidden">
     <p class="eyebrow">ACCESIBILIDADE</p>
     <h2>Axustes de xogo</h2>
-    <label><span>Volume</span><input id="setting-volume" type="range" min="0" max="100" value="70"></label>
+    <h3 class="settings-section">Son</h3>
+    <label><span>Música</span><input id="setting-music" type="range" min="0" max="100" value="70"></label>
+    <label><span>Efectos</span><input id="setting-effects" type="range" min="0" max="100" value="70"></label>
+    <button id="preview-music" class="audio-preview-button">♪ Probar música de fondo</button>
+    <h3 class="settings-section">Imaxe e controis</h3>
     <label><span>Tamaño da interface</span><input id="setting-ui" type="range" min="85" max="125" value="100"></label>
     <label><span>Sacudida de cámara</span><input id="setting-shake" type="checkbox" checked></label>
     <label><span>Alto contraste</span><input id="setting-contrast" type="checkbox"></label>
@@ -121,6 +131,10 @@
           <option value="citadel">Ciudadela Esmeralda</option>
           <option value="foundry">Forxa Rubí</option>
           <option value="delta">Delta Cobalto</option>
+          <option value="glacier">Paso Xeado</option>
+          <option value="marsh">Néboa Esmeralda</option>
+          <option value="arsenal">Arsenal Carmesí</option>
+          <option value="fortress">Fortaleza Obsidiana</option>
         </select>
       </label>
       <label>Dificultade
@@ -142,17 +156,25 @@
   <header id="hud" class="hud hidden">
     <div><small>PUNTOS</small><strong id="score">000000</strong></div>
     <div class="mission"><small id="mode">LOCAL</small><strong id="status">DEFENDE O NÚCLEO</strong></div>
-    <div><small>INIMIGOS</small><strong id="enemies">12</strong><em id="difficulty">ASEDIO</em></div>
+    <div><small id="counter-label">INIMIGOS</small><strong id="enemies">12</strong><em id="difficulty">ASEDIO</em></div>
     <div id="room-wrap" class="room hidden"><small>SALA</small><strong id="room">-----</strong></div>
   </header>
+  <div id="battle-status" class="battle-status hidden">
+    <span>NÚCLEO <b id="base-health">◆◆◆</b></span>
+    <span>RANGO <b id="team-rank">I · 0/5</b><i class="rank-meter"><i id="rank-fill"></i></i></span>
+    <span class="music-scene">MÚSICA <b id="music-scene">CIUDADELA</b></span>
+    <span id="capture-wrap" class="hidden">BALIZA <b id="capture-progress">0%</b></span>
+  </div>
+  <canvas id="minimap" class="minimap hidden" width="150" height="150" aria-label="Minimapa"></canvas>
   <div id="player-status" class="player-status hidden"></div>
+  <div id="game-notice" class="game-notice hidden" role="status"></div>
 
   <div id="touch-controls" class="touch-controls" aria-label="Controles táctiles">
     <div class="touch-dpad">
       <button data-control="up">▲</button><button data-control="left">◀</button>
       <button data-control="down">▼</button><button data-control="right">▶</button>
     </div>
-    <div class="touch-actions"><button data-control="switch">Q</button><button data-control="fire">●</button></div>
+    <div class="touch-actions"><button data-control="switch">Q</button><button data-control="use">E</button><button data-control="fire">●</button></div>
   </div>
 
   <section id="result" class="panel result hidden">
@@ -160,10 +182,11 @@
     <h2 id="result-title">VICTORIA</h2>
     <p id="result-copy"></p>
     <button id="restart" class="accent">Xogar de novo</button>
+    <button id="result-campaign" class="hidden">Ver campaña</button>
     <button id="back">Volver ao menú</button>
   </section>
 
   <div id="connection" class="connection hidden">Conectando…</div>
-  <script type="module" src="/src/client/main.js"></script>
+  <script type="module" src="/src/client/main.js?v=14"></script>
 </body>
 </html>

@@ -2,8 +2,8 @@ const held = new Set();
 const pressed = new Set();
 const touch = new Set();
 let bindings = [
-  { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', fire: 'Space', switch: 'KeyQ', touch: true },
-  { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', fire: 'Enter', switch: 'ShiftRight' },
+  { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', fire: 'Space', switch: 'KeyQ', use: 'KeyE', touch: true },
+  { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', fire: 'Enter', switch: 'ShiftRight', use: 'Slash' },
 ];
 
 export function setBindings(next) {
@@ -27,6 +27,7 @@ function keyboard(codes) {
     z: (held.has(codes.down) || codes.touch && touch.has('down') ? 1 : 0) - (held.has(codes.up) || codes.touch && touch.has('up') ? 1 : 0),
     fire: held.has(codes.fire) || codes.touch && touch.has('fire'),
     switch: held.has(codes.switch) || codes.touch && touch.has('switch'),
+    use: held.has(codes.use) || codes.touch && touch.has('use'),
     aimX: 0, aimZ: 0,
   };
 }
@@ -40,6 +41,7 @@ function gamepad(index) {
     aimX: dead(pad.axes[2] || 0), aimZ: dead(pad.axes[3] || 0),
     fire: !!(pad.buttons[0]?.pressed || pad.buttons[7]?.pressed),
     switch: !!pad.buttons[3]?.pressed,
+    use: !!pad.buttons[1]?.pressed,
   };
   return Object.values(input).some(Boolean) ? input : null;
 }

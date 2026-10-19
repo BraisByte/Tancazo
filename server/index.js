@@ -14,12 +14,13 @@ const types = new Map([
   ['.html', 'text/html; charset=utf-8'], ['.js', 'text/javascript; charset=utf-8'],
   ['.css', 'text/css; charset=utf-8'], ['.json', 'application/json; charset=utf-8'],
   ['.png', 'image/png'], ['.svg', 'image/svg+xml'], ['.woff2', 'font/woff2'],
+  ['.ogg', 'audio/ogg'], ['.mp3', 'audio/mpeg'], ['.wav', 'audio/wav'],
 ]);
 
 function staticPath(urlPath) {
   if (urlPath.startsWith('/vendor/three/')) return join(ROOT, 'node_modules/three', urlPath.slice('/vendor/three/'.length));
   if (urlPath === '/') return join(ROOT, 'index.html');
-  const allowed = ['/styles/', '/src/client/', '/src/shared/'];
+  const allowed = ['/styles/', '/src/client/', '/src/shared/', '/assets/'];
   if (!allowed.some((prefix) => urlPath.startsWith(prefix))) return null;
   const requested = urlPath.slice(1);
   const safe = normalize(requested).replace(/^(\.\.[/\\])+/, '');
@@ -178,6 +179,7 @@ server.on('upgrade', (req, socket, head) => {
               aimZ: Math.max(-1, Math.min(1, Number(input.aimZ) || 0)),
               fire: !!input.fire,
               switch: !!input.switch,
+              use: !!input.use,
             };
           }
         }

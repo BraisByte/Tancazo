@@ -77,6 +77,7 @@ button.accent { color: #062318; border-color: transparent; background: linear-gr
 .controls b { color: var(--cyan); }
 .secondary-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 9px; }
 .secondary-actions button { min-height: 36px; padding: 7px; color: #9fc3d1; font-size: 11px; }
+.music-shortcut { width: 100%; min-height: 34px; margin-top: 8px; padding: 6px 10px; color: var(--cyan); border-color: rgba(76,201,240,.35); font-size: 11px; }
 .setup-row { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 10px; }
 .setup-row label { display: grid; gap: 6px; color: #9eb9c4; font-size: 10px; font-weight: 800; letter-spacing: .1em; }
 .setup-row select { width: 100%; color: var(--cream); background: rgba(3, 13, 22, .64); border: 1px solid var(--line); border-radius: 10px; }
@@ -96,7 +97,8 @@ button.accent { color: #062318; border-color: transparent; background: linear-gr
 .wide h3 { margin: 24px 0 5px; color: var(--mint); }
 .mission-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
 .mission-card { display: grid; min-height: 160px; align-content: space-between; padding: 15px; border: 1px solid var(--line); border-radius: 13px; background: rgba(3,13,22,.48); }
-.mission-card.locked { opacity: .45; filter: grayscale(.7); }
+.mission-card.future { opacity: .68; }
+.mission-card.future button { color: var(--cyan); border-color: rgba(76,201,240,.35); }
 .mission-card h3 { margin: 0; color: var(--cream); }
 .mission-card p { color: #91aebb; font-size: 12px; line-height: 1.45; }
 .stars { color: var(--orange); letter-spacing: .16em; }
@@ -131,6 +133,8 @@ button.accent { color: #062318; border-color: transparent; background: linear-gr
 .settings-panel input[type="checkbox"] { width: 22px; height: 22px; }
 .settings-panel button { width: 100%; margin-top: 16px; }
 .settings-panel h3 { margin: 20px 0 5px; color: var(--mint); font-size: 13px; }
+.settings-panel .settings-section { margin-top: 12px; color: var(--cyan); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+.settings-panel .audio-preview-button { margin: 10px 0 4px; color: var(--cyan); border-color: rgba(76,201,240,.4); }
 .binding-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .binding-list button { margin: 0; min-height: 42px; padding: 5px; font-size: 10px; }
 .binding-list button b { display: block; color: var(--cyan); font-size: 9px; }
@@ -156,6 +160,13 @@ button.accent { color: #062318; border-color: transparent; background: linear-gr
 .player-chip b { display: block; color: var(--cream); font-size: 11px; }
 .player-chip span { color: #8eb0bd; font-size: 10px; }
 .health-pips { color: #ff6f80; letter-spacing: .08em; }
+.battle-status { position: fixed; right: 18px; bottom: 18px; display: flex; gap: 8px; z-index: 3; pointer-events: none; }
+.battle-status span { padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; color: #8cb2c1; background: rgba(3,13,22,.74); font: 800 9px "Arial Narrow", sans-serif; letter-spacing: .1em; }
+.battle-status b { display: block; margin-top: 2px; color: var(--mint); font-size: 11px; letter-spacing: .05em; }
+.rank-meter { display: block; width: 78px; height: 4px; margin-top: 5px; overflow: hidden; border-radius: 4px; background: rgba(255,255,255,.12); }
+.rank-meter i { display: block; width: 0; height: 100%; background: linear-gradient(90deg, var(--cyan), var(--mint)); transition: width .2s; }
+.minimap { position: fixed; right: 18px; top: 90px; width: 128px; height: 128px; border: 1px solid var(--line); border-radius: 12px; background: rgba(3,13,22,.82); box-shadow: 0 8px 24px #0006; z-index: 3; pointer-events: none; }
+.game-notice { position: fixed; left: 50%; top: 92px; transform: translateX(-50%); max-width: min(88vw, 460px); padding: 11px 18px; border: 1px solid rgba(71,230,164,.55); border-radius: 12px; color: var(--cream); background: rgba(3,20,29,.92); box-shadow: 0 10px 35px #0008; font: 800 12px "Arial Narrow", sans-serif; letter-spacing: .08em; text-align: center; z-index: 4; pointer-events: none; }
 
 .touch-controls { position: fixed; inset: auto 16px 16px; display: none; justify-content: space-between; z-index: 4; pointer-events: none; }
 .touch-controls button { width: 58px; height: 58px; min-height: 0; border-radius: 50%; background: rgba(8,25,38,.68); pointer-events: auto; touch-action: none; }
@@ -184,6 +195,11 @@ body.reduced-shake canvas { transform: none !important; }
   .mission-grid, .upgrade-list { grid-template-columns: 1fr; }
   .editor-layout { grid-template-columns: 1fr; }
   .editor-grid { min-width: 0; }
+  .player-status { bottom: 90px; max-width: calc(100vw - 20px); overflow: hidden; }
+  .battle-status { top: 104px; right: 10px; bottom: auto; flex-direction: column; }
+  .music-scene { display: none !important; }
+  .minimap { display: none !important; }
+  .game-notice { top: 166px; }
 }
 
 @media (pointer: coarse) { body.playing .touch-controls { display: flex !important; } }

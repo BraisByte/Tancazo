@@ -50,6 +50,14 @@ export class GameRenderer {
       base: new THREE.MeshBasicMaterial({ color: 0x7fffd4 }),
       pickup: new THREE.MeshBasicMaterial({ color: 0x8dffbd }),
       boss: new THREE.MeshBasicMaterial({ color: 0xff315c }),
+      rank: new THREE.MeshBasicMaterial({ color: 0xffdc73 }),
+      freeze: new THREE.MeshBasicMaterial({ color: 0x8fe7ff }),
+      emp: new THREE.MeshBasicMaterial({ color: 0xc69cff }),
+      mine: new THREE.MeshBasicMaterial({ color: 0xff733d }),
+      decoy: new THREE.MeshBasicMaterial({ color: 0xffdc73 }),
+      repair: new THREE.MeshBasicMaterial({ color: 0x61e786 }),
+      fortress: new THREE.MeshBasicMaterial({ color: 0x73e8ff }),
+      shield: new THREE.MeshBasicMaterial({ color: 0x73e8ff }),
     };
     this.mapSignature = '';
     this.predictedInputs = {};
@@ -93,6 +101,10 @@ export class GameRenderer {
       citadel: { background: 0x08131f, ground: palette.ground, fog: 0x08131f },
       foundry: { background: 0x180d17, ground: 0x38222d, fog: 0x180d17 },
       delta: { background: 0x071927, ground: 0x17394a, fog: 0x071927 },
+      glacier: { background: 0x0a1d2d, ground: 0x31566a, fog: 0x9bcde0 },
+      marsh: { background: 0x071712, ground: 0x173b2c, fog: 0x193d31 },
+      arsenal: { background: 0x190d12, ground: 0x3c2023, fog: 0x190d12 },
+      fortress: { background: 0x0c0c16, ground: 0x242637, fog: 0x0c0c16 },
     };
     const biome = biomes[map.id] || biomes.citadel;
     this.scene.background.setHex(biome.background);
@@ -149,7 +161,7 @@ export class GameRenderer {
 
   setupWeather(map) {
     this.weatherGroup.clear();
-    const count = map.id === 'delta' ? 220 : map.id === 'foundry' ? 90 : 45;
+    const count = map.id === 'delta' ? 220 : map.id === 'glacier' ? 180 : map.id === 'foundry' || map.id === 'arsenal' ? 90 : 45;
     const positions = new Float32Array(count * 3);
     for (let index = 0; index < count; index++) {
       positions[index * 3] = Math.random() * map.width;
@@ -158,9 +170,9 @@ export class GameRenderer {
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    const color = map.id === 'foundry' ? 0xff7b35 : map.id === 'delta' ? 0xa7e6ff : 0xc4e4d2;
+    const color = map.id === 'foundry' || map.id === 'arsenal' ? 0xff7b35 : map.id === 'delta' || map.id === 'glacier' ? 0xa7e6ff : 0xc4e4d2;
     const points = new THREE.Points(geometry, new THREE.PointsMaterial({ color, size: map.id === 'delta' ? .045 : .065, transparent: true, opacity: .55 }));
-    points.userData.mode = map.id === 'foundry' ? 'embers' : map.id === 'delta' ? 'rain' : 'dust';
+    points.userData.mode = map.id === 'foundry' || map.id === 'arsenal' ? 'embers' : map.id === 'delta' ? 'rain' : map.id === 'glacier' ? 'snow' : 'dust';
     points.userData.height = 10;
     this.weatherGroup.add(points);
   }
@@ -178,6 +190,10 @@ export class GameRenderer {
         positions[index + 1] += dt * .7;
         positions[index] += Math.sin(this.clock + index) * dt * .08;
         if (positions[index + 1] > points.userData.height) positions[index + 1] = .1;
+      } else if (points.userData.mode === 'snow') {
+        positions[index + 1] -= dt * 1.2;
+        positions[index] += Math.sin(this.clock + index) * dt * .25;
+        if (positions[index + 1] < .1) positions[index + 1] = points.userData.height;
       } else {
         positions[index] += dt * .12;
         if (positions[index] > 15) positions[index] = 0;
@@ -187,6 +203,19 @@ export class GameRenderer {
   }
 
   makeTank(tank) {
+    if (tank.kind === 'generator') {
+      const group = new THREE.Group();
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(.42, .5, .35, 10), material(0x68243b, .35, .65));
+      base.position.y = .18;
+      const coil = new THREE.Mesh(new THREE.TorusGeometry(.25, .07, 8, 20), new THREE.MeshStandardMaterial({ color: 0xff5d73, emissive: 0xff315c, emissiveIntensity: .7 }));
+      coil.position.y = .55; coil.rotation.x = Math.PI / 2;
+      const core = new THREE.Mesh(new THREE.OctahedronGeometry(.18), new THREE.MeshBasicMaterial({ color: 0xffb0bc }));
+      core.position.y = .55;
+      group.add(base, coil, core);
+      group.userData.tracks = [];
+      group.traverse((object) => { if (object.isMesh) { object.castShadow = true; object.receiveShadow = true; } });
+      return group;
+    }
     const group = new THREE.Group();
     const color = new THREE.Color(tank.color);
     const bodyMat = material(color, .48, .28);
@@ -209,6 +238,7 @@ export class GameRenderer {
     shield.visible = false;
     group.add(body, leftTrack, rightTrack, turret, barrel, shield);
     group.userData.barrel = barrel;
+    group.userData.bodyMaterial = bodyMat;
     group.userData.tracks = [leftTrack, rightTrack];
     group.traverse((object) => { if (object.isMesh) { object.castShadow = true; object.receiveShadow = true; } });
     group.userData.kind = tank.kind;
@@ -226,7 +256,7 @@ export class GameRenderer {
   }
 
   makePowerup(powerup) {
-    const colors = { repair: 0x61e786, shield: 0x4cc9f0, rapid: 0xffd166, bomb: 0xff5d73, heavy: 0xff9f43, ricochet: 0x75d5ff, rocket: 0xff315c };
+    const colors = { repair: 0x61e786, shield: 0x4cc9f0, rapid: 0xffd166, bomb: 0xff5d73, heavy: 0xff9f43, ricochet: 0x75d5ff, rocket: 0xff315c, freeze: 0x8fe7ff, emp: 0xc69cff, mine: 0xff733d, decoy: 0xffdc73, fortress: 0x73e8ff };
     const group = new THREE.Group();
     const ring = new THREE.Mesh(
       new THREE.TorusGeometry(.25, .055, 8, 18),
@@ -237,6 +267,20 @@ export class GameRenderer {
     group.add(ring, core);
     group.userData.powerup = true;
     group.userData.phase = Math.random() * Math.PI * 2;
+    return group;
+  }
+
+  makeDeployable(type) {
+    if (type === 'mine') {
+      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(.24, .3, .1, 10), material(0xff733d, .4, .65));
+      mesh.position.y = .06;
+      return mesh;
+    }
+    const group = new THREE.Group();
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(.035, .045, .55, 8), material(0xffdc73, .5, .45));
+    const beacon = new THREE.Mesh(new THREE.OctahedronGeometry(.16), new THREE.MeshBasicMaterial({ color: 0xffdc73 }));
+    beacon.position.y = .38;
+    group.add(pole, beacon);
     return group;
   }
 
@@ -259,6 +303,11 @@ export class GameRenderer {
       if (mesh.userData.barrel) mesh.userData.barrel.position.z = -.34 + (tank.recoil || 0) * .1;
       const movement = Math.hypot(tank.vx || 0, tank.vz || 0);
       for (const track of mesh.userData.tracks || []) track.position.y = .2 + Math.sin(this.clock * 18 * movement) * .012;
+      if (tank.kind === 'player') mesh.scale.setScalar(1 + ((tank.rank || 1) - 1) * .035);
+      if (mesh.userData.bodyMaterial) {
+        mesh.userData.bodyMaterial.emissive.setHex(tank.frozenTimer > 0 ? 0x258eb5 : tank.empTimer > 0 ? 0x6e32a8 : 0x000000);
+        mesh.userData.bodyMaterial.emissiveIntensity = tank.frozenTimer > 0 || tank.empTimer > 0 ? .7 : 0;
+      }
     }
     for (const bullet of state.bullets) {
       aliveIds.add(bullet.id);
@@ -272,6 +321,28 @@ export class GameRenderer {
       if (!mesh) { mesh = this.makePowerup(powerup); this.meshes.set(powerup.id, mesh); this.entityGroup.add(mesh); }
       mesh.position.set(powerup.x, .35 + Math.sin(this.clock * 3 + mesh.userData.phase) * .1, powerup.z);
       mesh.rotation.y += dt * 1.9;
+    }
+    for (const mine of state.mines || []) {
+      aliveIds.add(mine.id);
+      let mesh = this.meshes.get(mine.id);
+      if (!mesh) { mesh = this.makeDeployable('mine'); this.meshes.set(mine.id, mesh); this.entityGroup.add(mesh); }
+      mesh.position.x = mine.x; mesh.position.z = mine.z;
+    }
+    for (const decoy of state.decoys || []) {
+      aliveIds.add(decoy.id);
+      let mesh = this.meshes.get(decoy.id);
+      if (!mesh) { mesh = this.makeDeployable('decoy'); this.meshes.set(decoy.id, mesh); this.entityGroup.add(mesh); }
+      mesh.position.set(decoy.x, .05, decoy.z); mesh.rotation.y += dt * 2.8;
+    }
+    if (state.capture) {
+      const id = 'capture-marker'; aliveIds.add(id);
+      let mesh = this.meshes.get(id);
+      if (!mesh) {
+        mesh = new THREE.Mesh(new THREE.RingGeometry(.85, 1.05, 32), new THREE.MeshBasicMaterial({ color: 0x47e6a4, side: THREE.DoubleSide, transparent: true, opacity: .65 }));
+        mesh.rotation.x = -Math.PI / 2; this.meshes.set(id, mesh); this.entityGroup.add(mesh);
+      }
+      mesh.position.set(state.capture.x, .025, state.capture.z);
+      mesh.material.opacity = .35 + state.capture.progress / state.capture.goal * .55;
     }
     for (const [id, mesh] of this.meshes) if (!aliveIds.has(id)) {
       mesh.removeFromParent();
@@ -339,7 +410,12 @@ export class GameRenderer {
     this.updateWeather(dt);
     this.tileGroup.traverse((object) => {
       if (object.userData.water) object.position.y = -.01 + Math.sin(this.clock * 2.2 + object.position.x) * .025;
-      if (object.userData.core) object.rotation.y += dt * 1.7;
+      if (object.userData.core) {
+        object.rotation.y += dt * 1.7;
+        object.scale.setScalar(.72 + Math.max(0, state.baseHp || 0) / Math.max(1, state.baseMaxHp || 3) * .28);
+        object.material.emissive.setHex(state.baseShieldTimer > 0 ? 0x2fbfff : 0x000000);
+        object.material.emissiveIntensity = state.baseShieldTimer > 0 ? .8 : 0;
+      }
     });
     this.renderer.render(this.scene, this.camera);
   }

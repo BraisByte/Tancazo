@@ -18,6 +18,9 @@ test('lobby configures and starts a four-seat online operation', { timeout: 15_0
     }
     assert.equal(health?.ok, true);
     assert.equal((await fetch(`http://127.0.0.1:${port}/server/index.js`)).status, 404);
+    const musicManifest = await fetch(`http://127.0.0.1:${port}/src/client/music/tracks.json`);
+    assert.equal(musicManifest.status, 200);
+    assert.deepEqual(await musicManifest.json(), { tracks: {} });
 
     const host = new WebSocket(`ws://127.0.0.1:${port}/online?create=1&name=Alpha&seats=2`);
     sockets.push(host);

@@ -2,11 +2,25 @@ export class GameAudio {
   constructor() {
     this.context = null;
     this.master = null;
+    this.musicBus = null;
+    this.effectsBus = null;
     this.knownBullets = new Set();
     this.knownEffects = new Set();
-    this.volume = .7;
+    this.musicVolume = .7;
+    this.effectsVolume = .7;
     this.nextBeat = 0;
     this.beat = 0;
+    this.trackManifest = {};
+    this.trackBuffers = new Map();
+    this.trackSource = null;
+    this.trackGain = null;
+    this.trackKey = '';
+    this.requestedTrack = '';
+    this.trackRequest = 0;
+    fetch('/src/client/music/tracks.json').then((response) => response.ok ? response.json() : {}).then((manifest) => {
+      this.trackManifest = manifest.tracks || {};
+      this.requestedTrack = '';
+    }).catch(() => {});
     const unlock = () => this.unlock();
     addEventListener('pointerdown', unlock, { once: true });
     addEventListener('keydown', unlock, { once: true });
@@ -16,18 +30,38 @@ export class GameAudio {
     if (!this.context) {
       this.context = new AudioContext();
       this.master = this.context.createGain();
-      this.master.gain.value = this.volume * .3;
+      this.musicBus = this.context.createGain();
+      this.effectsBus = this.context.createGain();
+      this.master.gain.value = .38;
+      this.musicBus.gain.value = Math.min(1.4, this.musicVolume * 1.35);
+      this.effectsBus.gain.value = this.effectsVolume;
+      this.musicBus.connect(this.master);
+      this.effectsBus.connect(this.master);
       this.master.connect(this.context.destination);
     }
-    if (this.context.state === 'suspended') this.context.resume();
+    if (this.context.state === 'suspended') return this.context.resume().then(() => {
+      this.nextBeat = this.context.currentTime;
+    });
+    this.nextBeat = Math.min(this.nextBeat, this.context.currentTime);
+    return Promise.resolve();
   }
 
-  setVolume(value) {
-    this.volume = Math.max(0, Math.min(1, Number(value)));
-    if (this.master) this.master.gain.value = this.volume * .3;
+  setVolumes(music, effects) {
+    this.musicVolume = Math.max(0, Math.min(1, Number(music)));
+    this.effectsVolume = Math.max(0, Math.min(1, Number(effects)));
+    if (this.musicBus) this.musicBus.gain.value = Math.min(1.4, this.musicVolume * 1.35);
+    if (this.effectsBus) this.effectsBus.gain.value = this.effectsVolume;
   }
 
-  tone(frequency, duration, type = 'square', volume = .18, slide = .55) {
+  async previewMusic() {
+    await this.unlock();
+    if (!this.context || this.context.state !== 'running') return;
+    this.tone(130.81, 1.1, 'sawtooth', .2, .98, this.musicBus);
+    this.tone(196, .9, 'triangle', .16, .98, this.musicBus);
+    this.tone(261.63, .7, 'triangle', .13, .98, this.musicBus);
+  }
+
+  tone(frequency, duration, type = 'square', volume = .18, slide = .55, destination = this.effectsBus) {
     if (!this.context || this.context.state !== 'running') return;
     const now = this.context.currentTime;
     const oscillator = this.context.createOscillator();
@@ -37,12 +71,12 @@ export class GameAudio {
     oscillator.frequency.exponentialRampToValueAtTime(Math.max(35, frequency * slide), now + duration);
     gain.gain.setValueAtTime(volume, now);
     gain.gain.exponentialRampToValueAtTime(.001, now + duration);
-    oscillator.connect(gain).connect(this.master);
+    oscillator.connect(gain).connect(destination || this.master);
     oscillator.start(now);
     oscillator.stop(now + duration);
   }
 
-  noise(duration = .18, volume = .28) {
+  noise(duration = .18, volume = .28, destination = this.effectsBus) {
     if (!this.context || this.context.state !== 'running') return;
     const frames = Math.ceil(this.context.sampleRate * duration);
     const buffer = this.context.createBuffer(1, frames, this.context.sampleRate);
@@ -54,11 +88,55 @@ export class GameAudio {
     filter.type = 'lowpass'; filter.frequency.value = 1200;
     gain.gain.value = volume;
     source.buffer = buffer;
-    source.connect(filter).connect(gain).connect(this.master);
+    source.connect(filter).connect(gain).connect(destination || this.master);
     source.start();
   }
 
-  update(state) {
+  async selectTrack(key) {
+    if (!this.context || this.requestedTrack === key) return;
+    this.requestedTrack = key;
+    const url = this.trackManifest[key];
+    if (!url) { this.fadeTrack(); return; }
+    const request = ++this.trackRequest;
+    try {
+      let buffer = this.trackBuffers.get(url);
+      if (!buffer) {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('track unavailable');
+        buffer = await this.context.decodeAudioData(await response.arrayBuffer());
+        this.trackBuffers.set(url, buffer);
+      }
+      if (request !== this.trackRequest || !this.context) return;
+      const now = this.context.currentTime;
+      const source = this.context.createBufferSource();
+      const gain = this.context.createGain();
+      source.buffer = buffer; source.loop = true;
+      gain.gain.setValueAtTime(.001, now);
+      gain.gain.exponentialRampToValueAtTime(1, now + 1.5);
+      source.connect(gain).connect(this.musicBus);
+      source.start();
+      this.fadeTrack(now);
+      this.trackSource = source;
+      this.trackGain = gain;
+      this.trackKey = key;
+    } catch {
+      if (request === this.trackRequest) this.fadeTrack();
+    }
+  }
+
+  fadeTrack(at = this.context?.currentTime || 0) {
+    if (this.trackGain && this.trackSource && this.context) {
+      this.trackGain.gain.cancelScheduledValues(at);
+      this.trackGain.gain.setValueAtTime(Math.max(.001, this.trackGain.gain.value), at);
+      this.trackGain.gain.exponentialRampToValueAtTime(.001, at + 1.5);
+      this.trackSource.stop(at + 1.55);
+    }
+    this.trackSource = null;
+    this.trackGain = null;
+    this.trackKey = '';
+  }
+
+  update(state, mode = 'menu') {
     const current = new Set(state.bullets.map((bullet) => bullet.id));
     for (const bullet of state.bullets) if (!this.knownBullets.has(bullet.id)) {
       this.tone(bullet.team === 'players' ? 240 : 170, .085, 'square', .12, .48);
@@ -73,14 +151,22 @@ export class GameAudio {
       else this.tone(520, .055, 'triangle', .08, .7);
     }
     if (this.knownEffects.size > 300) this.knownEffects.clear();
-    if (this.context?.state === 'running' && state.status === 'playing' && this.context.currentTime >= this.nextBeat) {
+    const scene = mode === 'menu' || mode === 'campaign' || mode === 'settings' || mode === 'editor' || mode === 'lobby' ? 'menu' : state.bossSpawned ? 'boss' : state.map.id;
+    if (this.context?.state === 'running') this.selectTrack(scene);
+    if (this.context?.state === 'running' && !this.trackKey && state.status === 'playing' && this.context.currentTime >= this.nextBeat) {
       const pressure = state.tanks.filter((tank) => tank.team === 'enemies' && tank.alive).length + (state.bossSpawned ? 4 : 0);
-      const interval = Math.max(.18, .42 - pressure * .018);
-      const roots = { citadel: 82.41, foundry: 73.42, delta: 92.5, custom: 87.31 };
-      const root = roots[state.map.id] || roots.custom;
+      const interval = mode === 'menu' || mode === 'campaign' ? .62 : Math.max(.18, .42 - pressure * .018);
+      const roots = { menu: 65.41, citadel: 82.41, foundry: 73.42, delta: 92.5, glacier: 98, marsh: 69.3, arsenal: 77.78, fortress: 58.27, boss: 55, custom: 87.31 };
+      const root = roots[scene] || roots.custom;
       const pattern = [1, 1.5, 1.25, 2, 1, 1.25, 1.5, 2.5];
-      this.tone(root * pattern[this.beat % pattern.length], interval * .72, this.beat % 4 ? 'triangle' : 'sawtooth', .035, .82);
-      if (this.beat % 4 === 0) this.tone(root / 2, interval * .9, 'sine', .055, .7);
+      this.tone(root * pattern[this.beat % pattern.length], interval * 1.25, this.beat % 4 ? 'triangle' : 'sawtooth', mode === 'menu' ? .09 : .14, .9, this.musicBus);
+      if (this.beat % 4 === 0) {
+        this.tone(root / 2, interval * 3.2, 'sine', mode === 'menu' ? .12 : .18, .86, this.musicBus);
+        this.tone(root * 1.25, interval * 2.8, 'sine', mode === 'menu' ? .07 : .1, .96, this.musicBus);
+        this.tone(58, .16, 'sine', .22, .45, this.musicBus);
+      } else if (this.beat % 4 === 2) {
+        this.noise(.09, .06, this.musicBus);
+      }
       this.beat++;
       this.nextBeat = this.context.currentTime + interval;
     }

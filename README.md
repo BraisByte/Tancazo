@@ -2,18 +2,23 @@
 
 Arcade cooperativo de tanques en color inspirado en los clásicos de defensa de base, construido para navegador con Three.js. El modo local y el online comparten una simulación determinista: las reglas de movimiento, combate, IA y objetivos son las mismas en cliente y servidor.
 
-## Estado actual — 0.3
+## Estado actual — 0.4
 
 - Un jugador, cooperativo local para dos y salas online autoritativas de hasta cuatro tanques.
 - Uno o dos jugadores por dispositivo, espectadores por código, reconexión automática y medición de latencia.
 - Lobby con anfitrión, preparación, campo, dificultad y cuenta atrás.
-- Campaña de cuatro sectores con eliminación, supervivencia, escolta y batalla final.
+- Campaña de diez sectores con eliminación, supervivencia, captura, escolta, sabotaje y batalla final.
 - Progresión persistente con estrellas y mejoras de blindaje, motor y recarga.
+- Evolución compartida durante cada partida: el tanque mejora en las bajas 5, 12, 22 y 35.
 - Cinco armas: cañón, autocañón, perforante, rebote y cohete con daño de área.
-- Ladrillos destructibles por cuadrantes, proyectiles que colisionan y siete potenciadores.
+- Objetos almacenables con activación manual: conxelador, bomba, EMP, mina, engado, reparación e fortaleza.
+- Tutorial de obxectos, avisos de recollida, barra de rango e minimapa táctico durante a partida.
+- Núcleo con tres puntos de resistencia, búnker inicial y escudo defensivo temporal.
+- Ladrillos destructibles por cuadrantes, proxectís que colisionan e doce potenciadores.
 - IA táctica con exploradores, asalto, pesados, francotiradores, ingenieros y comandantes.
 - Jefe Leviatán con fases, escudo, cambios de arma y refuerzos.
-- Tres campos 3D con iluminación, partículas meteorológicas, efectos, cámara y música procedimental adaptativa.
+- Sete campos 3D con iluminación, partículas meteorolóxicas, efectos, cámara e música adaptativa por escenario.
+- Reprodutor de pistas OGG/MP3/WAV con fundidos, fallback procedemental e volumes separados de música e efectos.
 - Editor visual de mapas con validación, importación/exportación JSON y prueba inmediata.
 - Teclado configurable, dos jugadores locales, mando, controles táctiles y ayuda de apuntado.
 - Ajustes de volumen, escala de interfaz, alto contraste y sacudida de cámara.
@@ -38,12 +43,12 @@ docker compose up --build
 
 ## Controles
 
-| Jugador | Movimiento | Disparo | Cambiar arma | Apuntar |
-|---|---|---|---|---|
-| 1 | WASD | Espacio | Q | Dirección de movimiento |
-| 2 | Flechas | Intro | Mayús derecha | Dirección de movimiento |
-| Mando | Stick izquierdo | A / gatillo derecho | Y | Stick derecho |
-| Táctil | Cruceta | Botón rojo | Q | Dirección de movimiento |
+| Jugador | Movimiento | Disparo | Cambiar arma | Usar objeto | Apuntar |
+|---|---|---|---|---|---|
+| 1 | WASD | Espacio | Q | E | Dirección de movimiento |
+| 2 | Flechas | Intro | Mayús derecha | / | Dirección de movimiento |
+| Mando | Stick izquierdo | A / gatillo derecho | Y | B | Stick derecho |
+| Táctil | Cruceta | Botón rojo | Q | E | Dirección de movimiento |
 
 `Esc` vuelve al menú. Las teclas del jugador 1 se pueden reasignar desde Accesibilidad.
 
